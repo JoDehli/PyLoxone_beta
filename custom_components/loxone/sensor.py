@@ -153,12 +153,14 @@ class LoxoneCustomSensor(LoxoneEntity, SensorEntity):
         return self._name
 
     @property
-    def state(self):
+    def native_value(self):
         return self._state
 
     @property
     def native_unit_of_measurement(self):
         """Return the unit of measurement of this entity, if any."""
+        if self._unit_of_measurement in ["None", "none", "-"]:
+            return None
         return self._unit_of_measurement
 
     @property
@@ -271,7 +273,7 @@ class Loxonesensor(LoxoneEntity, SensorEntity):
     async def event_handler(self, e):
         if self.uuidAction in e.data:
             if self.typ == "analog":
-                self.state = e.data[self.uuidAction]
+                self._state = e.data[self.uuidAction]
             elif self.typ == "digital":
                 self._state = e.data[self.uuidAction]
                 if self._state == 1.0:

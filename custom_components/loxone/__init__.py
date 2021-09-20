@@ -7,6 +7,7 @@ https://github.com/JoDehli/PyLoxone
 import asyncio
 import logging
 import re
+import sys
 import traceback
 
 import homeassistant.components.group as group
@@ -20,7 +21,6 @@ from homeassistant.const import (
     EVENT_HOMEASSISTANT_START,
     EVENT_HOMEASSISTANT_STOP,
 )
-
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.discovery import async_load_platform
 from homeassistant.helpers.entity import Entity
@@ -310,8 +310,6 @@ class LoxoneEntity(Entity):
                     setattr(self, key, kwargs[key])
                 except:
                     traceback.print_exc()
-                    import sys
-
                     sys.exit(-1)
 
         self.listener = None
