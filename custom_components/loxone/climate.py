@@ -25,7 +25,7 @@ from homeassistant.components.climate.const import (
 from voluptuous import All, Optional, Range
 
 from . import LoxoneEntity
-from .const import CONF_HVAC_AUTO_MODE, SENDDOMAIN, DOMAIN
+from .const import CONF_HVAC_AUTO_MODE, DOMAIN, SENDDOMAIN
 from .helpers import (
     get_all_roomcontroller_entities,
     get_cat_name_from_cat_uuid,
@@ -86,8 +86,8 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
         new_thermostat = LoxoneRoomControllerV2(**climate)
         devices.append(new_thermostat)
 
-    async_add_devices(devices, True)
-    return True
+    async_add_devices(devices)
+
 
 
 class LoxoneRoomControllerV2(LoxoneEntity, ClimateEntity, ABC):
@@ -265,4 +265,5 @@ class LoxoneRoomControllerV2(LoxoneEntity, ClimateEntity, ABC):
             "manufacturer": "Loxone",
             "model": "RoomControllerV2",
             "type": self.type,
+            "suggested_area": self.room
         }

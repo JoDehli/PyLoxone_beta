@@ -8,11 +8,16 @@ import logging
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-from homeassistant.components.sensor import PLATFORM_SCHEMA
-from homeassistant.components.sensor import SensorEntity
-from homeassistant.const import (CONF_NAME, CONF_UNIT_OF_MEASUREMENT,
-                                 CONF_VALUE_TEMPLATE, STATE_OFF, STATE_ON,
-                                 STATE_UNKNOWN, CONF_DEVICE_CLASS)
+from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity
+from homeassistant.const import (
+    CONF_DEVICE_CLASS,
+    CONF_NAME,
+    CONF_UNIT_OF_MEASUREMENT,
+    CONF_VALUE_TEMPLATE,
+    STATE_OFF,
+    STATE_ON,
+    STATE_UNKNOWN,
+)
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
@@ -60,7 +65,7 @@ async def async_setup_platform(
     return True
 
 
-async def async_setup_entry(hass, config_entry, async_add_devices):
+async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up entry."""
     miniserver = get_miniserver_from_config_entry(hass, config_entry)
 
@@ -102,7 +107,7 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
 
     @callback
     def async_add_sensors(_):
-        async_add_devices(_, True)
+        async_add_entities(_, True)
 
     miniserver.listeners.append(
         async_dispatcher_connect(
@@ -110,8 +115,7 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
         )
     )
 
-    async_add_sensors(sensors)
-    # return True
+    async_add_entities(sensors)
 
 
 class LoxoneCustomSensor(LoxoneEntity, SensorEntity):
@@ -172,7 +176,6 @@ class LoxoneCustomSensor(LoxoneEntity, SensorEntity):
         return {
             "uuid": self.uuidAction,
             "plattform": "loxone",
-            "show_last_changed": "true",
         }
 
     @property
@@ -251,9 +254,7 @@ class LoxoneTextSensor(LoxoneEntity, SensorEntity):
             "uuid": self.uuidAction,
             "device_typ": self.type,
             "plattform": "loxone",
-            "room": self.room,
             "category": self.cat,
-            "show_last_changed": "true",
         }
 
 
@@ -339,9 +340,7 @@ class Loxonesensor(LoxoneEntity, SensorEntity):
             "uuid": self.uuidAction,
             "device_typ": self.typ + "_sensor",
             "plattform": "loxone",
-            "room": self.room,
             "category": self.cat,
-            "show_last_changed": "true",
         }
 
     @property
@@ -353,6 +352,7 @@ class Loxonesensor(LoxoneEntity, SensorEntity):
                 "manufacturer": "Loxone",
                 "model": "Sensor analog",
                 "type": self.typ,
+                "suggested_area": self.room
             }
         else:
             return {
@@ -361,4 +361,5 @@ class Loxonesensor(LoxoneEntity, SensorEntity):
                 "manufacturer": "Loxone",
                 "model": "Sensor digital",
                 "type": self.typ,
+                "suggested_area": self.room
             }

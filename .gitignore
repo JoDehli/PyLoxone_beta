@@ -18,4 +18,6 @@ hass.py
 
 __pycache__
 custom_components/loxone/homeassistant
-.vscode
+lox_token.cfg
+config
+

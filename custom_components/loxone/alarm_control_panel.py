@@ -22,14 +22,13 @@ from homeassistant.const import (
     CONF_USERNAME,
     STATE_ALARM_ARMED_AWAY,
     STATE_ALARM_ARMED_HOME,
-    STATE_ALARM_DISARMED,
     STATE_ALARM_ARMING,
+    STATE_ALARM_DISARMED,
     STATE_ALARM_TRIGGERED,
 )
 
 from . import LoxoneEntity
-from .const import SECUREDSENDDOMAIN, SENDDOMAIN, DOMAIN, EVENT
-
+from .const import DOMAIN, EVENT, SECUREDSENDDOMAIN, SENDDOMAIN
 from .helpers import (
     get_all_alarm,
     get_cat_name_from_cat_uuid,
@@ -292,4 +291,5 @@ class LoxoneAlarm(LoxoneEntity, AlarmControlPanelEntity):
             "manufacturer": "Loxone",
             "model": "Alarm",
             "type": self.type,
+            "suggested_area": self.room
         }

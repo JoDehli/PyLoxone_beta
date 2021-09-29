@@ -157,7 +157,7 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
             )
 
         new_dimmer = LoxoneDimmer(**dimmer)
-        devices.append(new_dimmer)
+        entites.append(new_dimmer)
 
     for switch in all_switches:
         switch.update(
@@ -172,7 +172,7 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
             }
         )
         new_switch = LoxoneLight(**switch)
-        devices.append(new_switch)
+        entites.append(new_switch)
 
     for color_picker in all_color_picker:
         color_picker.update(
@@ -189,8 +189,7 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
         new_color_picker = LoxoneColorPickerV2(**color_picker)
         devices.append(new_color_picker)
 
-    async_add_devices(devices, True)
-    return True
+    async_add_devices(devices)
 
 
 class LoxonelightcontrollerV2(LoxoneEntity, LightEntity):
@@ -338,6 +337,7 @@ class LoxonelightcontrollerV2(LoxoneEntity, LightEntity):
             "name": self.name,
             "manufacturer": "Loxone",
             "model": "LightControllerV2",
+            "suggested_area": self.room
         }
 
     @property
@@ -657,6 +657,7 @@ class LoxoneLight(LoxoneEntity, LightEntity, ToggleEntity):
                 "name": self.name,
                 "manufacturer": "Loxone",
                 "model": "LightControllerV2",
+                "suggested_area": self.room,
                 "type": self.type,
             }
         else:
@@ -665,6 +666,7 @@ class LoxoneLight(LoxoneEntity, LightEntity, ToggleEntity):
                 "name": self.name,
                 "manufacturer": "Loxone",
                 "model": "Light",
+                "suggested_area": self.room,
                 "type": self.type,
             }
 
@@ -878,6 +880,7 @@ class LoxoneColorPickerV2(LoxoneEntity, LightEntity):
                 "manufacturer": "Loxone",
                 "type": self.type,
                 "model": "LightControllerV2",
+                "suggested_area": self.room,
             }
         else:
             return {
@@ -885,6 +888,7 @@ class LoxoneColorPickerV2(LoxoneEntity, LightEntity):
                 "name": self.name,
                 "manufacturer": "Loxone",
                 "model": "ColorPickerV2",
+                "suggested_area": self.room,
             }
 
     @property
@@ -918,6 +922,7 @@ class LoxoneDimmer(LoxoneEntity, LightEntity):
                 "name": self.name,
                 "manufacturer": "Loxone",
                 "model": "LightControllerV2",
+                "suggested_area": self.room
             }
         else:
             return {
@@ -925,6 +930,7 @@ class LoxoneDimmer(LoxoneEntity, LightEntity):
                 "name": self.name,
                 "manufacturer": "Loxone",
                 "model": "Dimmer",
+                "suggested_area": self.room
             }
 
     @property
