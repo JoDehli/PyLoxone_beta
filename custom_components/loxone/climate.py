@@ -68,7 +68,7 @@ async def async_setup_platform(hass, config, async_add_devices, discovery_info={
 async def async_setup_entry(hass, config_entry, async_add_devices):
     """Set up LoxoneRoomControllerV2."""
     miniserver = get_miniserver_from_config_entry(hass, config_entry)
-    loxconfig = miniserver.lox_config.json
+    loxconfig = miniserver.api.json
     devices = []
 
     for climate in get_all_roomcontroller_entities(loxconfig):

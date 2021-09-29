@@ -58,7 +58,7 @@ async def async_setup_platform(hass, config, async_add_devices, discovery_info={
 async def async_setup_entry(hass, config_entry, async_add_entites):
     """Set Loxone covers."""
     miniserver = get_miniserver_from_config_entry(hass, config_entry)
-    loxconfig = miniserver.lox_config.json
+    loxconfig = miniserver.api.json
     covers = []
 
     for cover in get_all_covers(loxconfig):

@@ -24,8 +24,8 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up entry."""
     miniserver = get_miniserver_from_config_entry(hass, config_entry)
-    loxconfig = miniserver.lox_config.json
-    entites = []
+    loxconfig = miniserver.api.json
+    devices = []
 
     for switch_entity in get_all_switch_entities(loxconfig):
         if switch_entity["type"] in ["Pushbutton", "Switch"]:
@@ -40,7 +40,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 }
             )
             new_push_button = LoxoneSwitch(**switch_entity)
-            entites.append(new_push_button)
+            devices.append(new_push_button)
 
         elif switch_entity["type"] == "TimedSwitch":
             switch_entity.update(
@@ -54,7 +54,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 }
             )
             new_push_button = LoxoneTimedSwitch(**switch_entity)
-            entites.append(new_push_button)
+            devices.append(new_push_button)
 
         elif switch_entity["type"] == "Intercom":
             if "subControls" in switch_entity:
@@ -83,9 +83,9 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                         }
                     )
                     new_push_button = LoxoneIntercomSubControl(**_)
-                    entites.append(new_push_button)
+                    devices.append(new_push_button)
 
-    async_add_entities(entites)
+    async_add_entities(devices)
 
 
 async def async_setup_platform(hass, config, async_add_devices, discovery_info={}):
