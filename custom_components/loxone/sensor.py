@@ -69,7 +69,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up entry."""
     miniserver = get_miniserver_from_config_entry(hass, config_entry)
 
-    loxconfig = miniserver.api.json
+    loxconfig = miniserver.lox_config.json
     sensors = []
     if "softwareVersion" in loxconfig:
         sensors.append(LoxoneVersionSensor(loxconfig["softwareVersion"]))

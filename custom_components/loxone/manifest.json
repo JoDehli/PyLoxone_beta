@@ -7,8 +7,7 @@
     "websockets",
     "pycryptodome",
     "numpy",
-    "requests_async",
-    "pyloxone-api==0.2.0"
+    "requests_async"
   ],
   "dependencies": [],
   "codeowners": ["JoDehli"],
@@ -16,5 +15,5 @@
   "homeassistant": "0.109.0",
   "render_readme": true,
   "config_flow": true,
-  "version": "0.3.6"
+  "version": "0.3.8"
 }

@@ -41,16 +41,14 @@ async def async_setup_platform(hass, config, async_add_devices, discovery_info=N
     return True
 
 
-async def async_setup_entry(hass, config_entry, async_add_devices):
+async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up Loxone Light Controller."""
     miniserver = get_miniserver_from_config_entry(hass, config_entry)
     generate_subcontrols = config_entry.options.get(
         "generate_lightcontroller_subcontrols", False
     )
-    loxconfig = miniserver.api.json
-    identify = loxconfig["msInfo"]["serialNr"]
-    devices = []
-    all_dimmers = []
+    loxconfig = miniserver.lox_config.json
+    entites = []
     all_light_controller_dimmers = []
     all_color_picker = []
     all_switches = []
@@ -65,7 +63,7 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
                 "cat": get_cat_name_from_cat_uuid(
                     loxconfig, light_controller.get("cat", "")
                 ),
-                "async_add_devices": async_add_devices,
+                "async_add_devices": async_add_entities,
             }
         )
         new_light_controller = LoxonelightcontrollerV2(**light_controller)
@@ -128,7 +126,7 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
                             light_controller["subControls"][sub_controll]
                         )
 
-        devices.append(new_light_controller)
+        entites.append(new_light_controller)
 
     _ = all_dimmers + all_light_controller_dimmers
 
@@ -142,7 +140,7 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
                     "cat": get_cat_name_from_cat_uuid(
                         loxconfig, light_controller.get("cat", "")
                     ),
-                    "async_add_devices": async_add_devices,
+                    "async_add_devices": async_add_entities,
                 }
             )
         else:
@@ -152,7 +150,7 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
                         loxconfig, dimmer.get("room", "")
                     ),
                     "cat": get_cat_name_from_cat_uuid(loxconfig, dimmer.get("cat", "")),
-                    "async_add_devices": async_add_devices,
+                    "async_add_devices": async_add_entities,
                 }
             )
 
@@ -168,7 +166,7 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
                 "cat": get_cat_name_from_cat_uuid(
                     loxconfig, light_controller.get("cat", "")
                 ),
-                "async_add_devices": async_add_devices,
+                "async_add_devices": async_add_entities,
             }
         )
         new_switch = LoxoneLight(**switch)
@@ -183,13 +181,13 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
                 "cat": get_cat_name_from_cat_uuid(
                     loxconfig, light_controller.get("cat", "")
                 ),
-                "async_add_devices": async_add_devices,
+                "async_add_devices": async_add_entities,
             }
         )
         new_color_picker = LoxoneColorPickerV2(**color_picker)
-        devices.append(new_color_picker)
+        entites.append(new_color_picker)
 
-    async_add_devices(devices)
+    async_add_entities(entites)
 
 
 class LoxonelightcontrollerV2(LoxoneEntity, LightEntity):
