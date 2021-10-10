@@ -12,15 +12,10 @@ import traceback
 
 import homeassistant.components.group as group
 import voluptuous as vol
-from homeassistant.const import (
-    CONF_HOST,
-    CONF_PASSWORD,
-    CONF_PORT,
-    CONF_USERNAME,
-    EVENT_COMPONENT_LOADED,
-    EVENT_HOMEASSISTANT_START,
-    EVENT_HOMEASSISTANT_STOP,
-)
+from homeassistant.const import (CONF_HOST, CONF_PASSWORD, CONF_PORT,
+                                 CONF_USERNAME, EVENT_COMPONENT_LOADED,
+                                 EVENT_HOMEASSISTANT_START,
+                                 EVENT_HOMEASSISTANT_STOP)
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
@@ -32,25 +27,11 @@ from .miniserver import MiniServer, get_miniserver_from_config_entry
 
 REQUIREMENTS = ["websockets", "pycryptodome", "numpy", "requests_async"]
 
-from .const import (
-    ATTR_CODE,
-    ATTR_COMMAND,
-    ATTR_UUID,
-    ATTR_VALUE,
-    DOMAIN_DEVICES,
-    SECUREDSENDDOMAIN,
-    SENDDOMAIN,
-    CONF_LIGHTCONTROLLER_SUBCONTROLS_GEN,
-    CONF_SCENE_GEN_DELAY,
-    cfmt,
-    LOXONE_PLATFORMS,
-    CONF_SCENE_GEN,
-    DEFAULT,
-    DOMAIN,
-    DEFAULT_DELAY_SCENE,
-    DEFAULT_PORT,
-    EVENT,
-)
+from .const import (ATTR_CODE, ATTR_COMMAND, ATTR_UUID, ATTR_VALUE,
+                    CONF_LIGHTCONTROLLER_SUBCONTROLS_GEN, CONF_SCENE_GEN,
+                    CONF_SCENE_GEN_DELAY, DEFAULT, DEFAULT_DELAY_SCENE,
+                    DEFAULT_PORT, DOMAIN, DOMAIN_DEVICES, EVENT,
+                    LOXONE_PLATFORMS, SECUREDSENDDOMAIN, SENDDOMAIN, cfmt)
 
 _LOGGER = logging.getLogger(__name__)
 

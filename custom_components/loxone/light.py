@@ -2,33 +2,19 @@ import logging
 from typing import Any
 
 import homeassistant.util.color as color_util
-from homeassistant.components.light import (
-    ATTR_BRIGHTNESS,
-    ATTR_COLOR_TEMP,
-    ATTR_EFFECT,
-    ATTR_HS_COLOR,
-    SUPPORT_BRIGHTNESS,
-    SUPPORT_COLOR,
-    SUPPORT_COLOR_TEMP,
-    SUPPORT_EFFECT,
-    LightEntity,
-    ToggleEntity,
-)
+from homeassistant.components.light import (ATTR_BRIGHTNESS, ATTR_COLOR_TEMP,
+                                            ATTR_EFFECT, ATTR_HS_COLOR,
+                                            SUPPORT_BRIGHTNESS, SUPPORT_COLOR,
+                                            SUPPORT_COLOR_TEMP, SUPPORT_EFFECT,
+                                            LightEntity, ToggleEntity)
 from homeassistant.const import STATE_UNKNOWN
 
 from . import LoxoneEntity
 from .const import DOMAIN, SENDDOMAIN, STATE_OFF, STATE_ON
-from .helpers import (
-    get_all_dimmer,
-    get_all_light_controller,
-    get_cat_name_from_cat_uuid,
-    get_room_name_from_room_uuid,
-    hass_to_lox,
-    lox2hass_mapped,
-    lox_to_hass,
-    to_hass_color_temp,
-    to_loxone_color_temp,
-)
+from .helpers import (get_all_dimmer, get_all_light_controller,
+                      get_cat_name_from_cat_uuid, get_room_name_from_room_uuid,
+                      hass_to_lox, lox2hass_mapped, lox_to_hass,
+                      to_hass_color_temp, to_loxone_color_temp)
 from .miniserver import get_miniserver_from_config_entry
 
 _LOGGER = logging.getLogger(__name__)

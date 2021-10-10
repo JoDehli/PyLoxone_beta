@@ -1,24 +1,14 @@
 import logging
 import traceback
 
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
-from homeassistant.core import callback
 from homeassistant.config import get_default_config_dir
-
-
+from homeassistant.const import (CONF_HOST, CONF_PASSWORD, CONF_PORT,
+                                 CONF_USERNAME)
+from homeassistant.core import callback
 from pyloxone_api import LoxAPI
 
-from .const import (
-    ATTR_CODE,
-    ATTR_UUID,
-    ATTR_VALUE,
-    DEFAULT,
-    EVENT,
-    SECUREDSENDDOMAIN,
-    SENDDOMAIN,
-    DOMAIN,
-)
-
+from .const import (ATTR_CODE, ATTR_UUID, ATTR_VALUE, DEFAULT, DOMAIN, EVENT,
+                    SECUREDSENDDOMAIN, SENDDOMAIN)
 from .helpers import get_miniserver_type
 
 _LOGGER = logging.getLogger(__name__)
@@ -68,7 +58,7 @@ class MiniServer:
 
     @callback
     async def async_loxone_callback(self, message) -> None:
-        """Handle event of new device creation in deCONZ."""
+        """Handle event from pyloxone-api."""
         self.hass.async_fire(EVENT, message)
 
     @property
