@@ -10,7 +10,7 @@ import logging
 from homeassistant.components.scene import Scene
 from homeassistant.helpers.entity_platform import async_call_later
 
-from .const import CONF_SCENE_GEN,  DOMAIN, SENDDOMAIN, DEFAULT_DELAY_SCENE
+from .const import CONF_SCENE_GEN, DOMAIN, SENDDOMAIN, DEFAULT_DELAY_SCENE
 from .miniserver import get_miniserver_from_config
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,7 +38,10 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
                         uuid = entity.uuidAction
                         devices.append(
                             Loxonelightscene(
-                                "{}-{}".format(entity.name, effect), mood_id, uuid, entity.unique_id
+                                "{}-{}".format(entity.name, effect),
+                                mood_id,
+                                uuid,
+                                entity.unique_id,
                             )
                         )
         async_add_devices(devices)

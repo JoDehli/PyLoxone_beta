@@ -12,10 +12,15 @@ import traceback
 
 import homeassistant.components.group as group
 import voluptuous as vol
-from homeassistant.const import (CONF_HOST, CONF_PASSWORD, CONF_PORT,
-                                 CONF_USERNAME, EVENT_COMPONENT_LOADED,
-                                 EVENT_HOMEASSISTANT_START,
-                                 EVENT_HOMEASSISTANT_STOP)
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_PASSWORD,
+    CONF_PORT,
+    CONF_USERNAME,
+    EVENT_COMPONENT_LOADED,
+    EVENT_HOMEASSISTANT_START,
+    EVENT_HOMEASSISTANT_STOP,
+)
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er

@@ -351,7 +351,7 @@ class Loxonesensor(LoxoneEntity, SensorEntity):
                 "manufacturer": "Loxone",
                 "model": "Sensor analog",
                 "type": self.typ,
-                "suggested_area": self.room
+                "suggested_area": self.room,
             }
         else:
             return {
@@ -360,5 +360,5 @@ class Loxonesensor(LoxoneEntity, SensorEntity):
                 "manufacturer": "Loxone",
                 "model": "Sensor digital",
                 "type": self.typ,
-                "suggested_area": self.room
+                "suggested_area": self.room,
             }

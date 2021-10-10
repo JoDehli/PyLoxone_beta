@@ -16,7 +16,7 @@ from .const import (
     EVENT,
     SECUREDSENDDOMAIN,
     SENDDOMAIN,
-    DOMAIN
+    DOMAIN,
 )
 
 from .helpers import get_miniserver_type

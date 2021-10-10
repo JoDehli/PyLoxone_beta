@@ -335,7 +335,7 @@ class LoxonelightcontrollerV2(LoxoneEntity, LightEntity):
             "name": self.name,
             "manufacturer": "Loxone",
             "model": "LightControllerV2",
-            "suggested_area": self.room
+            "suggested_area": self.room,
         }
 
     @property
@@ -920,7 +920,7 @@ class LoxoneDimmer(LoxoneEntity, LightEntity):
                 "name": self.name,
                 "manufacturer": "Loxone",
                 "model": "LightControllerV2",
-                "suggested_area": self.room
+                "suggested_area": self.room,
             }
         else:
             return {
@@ -928,7 +928,7 @@ class LoxoneDimmer(LoxoneEntity, LightEntity):
                 "name": self.name,
                 "manufacturer": "Loxone",
                 "model": "Dimmer",
-                "suggested_area": self.room
+                "suggested_area": self.room,
             }
 
     @property

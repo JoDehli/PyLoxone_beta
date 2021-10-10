@@ -83,7 +83,6 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
     async_add_devices(devices)
 
 
-
 class LoxoneRoomControllerV2(LoxoneEntity, ClimateEntity, ABC):
     """Loxone room controller"""
 
@@ -259,5 +258,5 @@ class LoxoneRoomControllerV2(LoxoneEntity, ClimateEntity, ABC):
             "manufacturer": "Loxone",
             "model": "RoomControllerV2",
             "type": self.type,
-            "suggested_area": self.room
+            "suggested_area": self.room,
         }

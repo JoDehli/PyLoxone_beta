@@ -91,6 +91,7 @@ async def async_setup_entry(hass, config_entry, async_add_entites):
     )
     async_add_entites(covers)
 
+
 class LoxoneGate(LoxoneEntity, CoverEntity):
     """Loxone Gate"""
 
@@ -219,7 +220,7 @@ class LoxoneGate(LoxoneEntity, CoverEntity):
             "manufacturer": "Loxone",
             "model": "Gate",
             "type": self.type,
-            "suggested_area": self.room
+            "suggested_area": self.room,
         }
 
 
@@ -332,7 +333,7 @@ class LoxoneWindow(LoxoneEntity, CoverEntity):
             "name": self.name,
             "manufacturer": "Loxone",
             "model": "Window",
-             "suggested_area": self.room
+            "suggested_area": self.room,
         }
 
 
@@ -639,5 +640,5 @@ class LoxoneJalousie(LoxoneEntity, CoverEntity):
             "manufacturer": "Loxone",
             "model": "Jalousie",
             "type": self.type,
-            "suggested_area": self.room
+            "suggested_area": self.room,
         }

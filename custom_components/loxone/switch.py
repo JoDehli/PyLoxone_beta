@@ -196,7 +196,7 @@ class LoxoneTimedSwitch(LoxoneEntity, SwitchEntity):
             "name": self.name,
             "manufacturer": "Loxone",
             "model": self.type,
-            "suggested_area": self.room
+            "suggested_area": self.room,
         }
 
 
@@ -286,7 +286,7 @@ class LoxoneSwitch(LoxoneEntity, SwitchEntity):
             "name": self.name,
             "manufacturer": "Loxone",
             "model": self.type,
-            "suggested_area": self.room
+            "suggested_area": self.room,
         }
 
 
@@ -322,5 +322,5 @@ class LoxoneIntercomSubControl(LoxoneSwitch):
             "name": self.name,
             "manufacturer": "Loxone",
             "model": self.type,
-            "suggested_area": self.room
+            "suggested_area": self.room,
         }
