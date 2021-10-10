@@ -56,19 +56,13 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
 
 # noinspection PyUnusedLocal
 async def async_setup_platform(hass, config, async_add_devices, discovery_info={}):
-    # value_template = config.get(CONF_VALUE_TEMPLATE)
-    # auto_mode = 0 if config.get(CONF_HVAC_AUTO_MODE) is None else config.get(CONF_HVAC_AUTO_MODE)
-    #
-    # if value_template is not None:
-    #     value_template.hass = hass
-    # config = hass.data[DOMAIN]
     return True
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
     """Set up LoxoneRoomControllerV2."""
     miniserver = get_miniserver_from_config_entry(hass, config_entry)
-    loxconfig = miniserver.lox_config.json
+    loxconfig = miniserver.api.json
     devices = []
 
     for climate in get_all_roomcontroller_entities(loxconfig):

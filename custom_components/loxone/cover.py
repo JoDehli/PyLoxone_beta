@@ -29,7 +29,6 @@ from homeassistant.helpers.event import track_utc_time_change
 
 from . import LoxoneEntity
 from .const import (
-    DOMAIN,
     SENDDOMAIN,
     SUPPORT_CLOSE_TILT,
     SUPPORT_OPEN_TILT,
@@ -37,6 +36,7 @@ from .const import (
     SUPPORT_SET_TILT_POSITION,
     SUPPORT_STOP,
     SUPPORT_STOP_TILT,
+    DOMAIN,
 )
 from .helpers import (
     get_all_covers,
@@ -58,7 +58,7 @@ async def async_setup_platform(hass, config, async_add_devices, discovery_info={
 async def async_setup_entry(hass, config_entry, async_add_entites):
     """Set Loxone covers."""
     miniserver = get_miniserver_from_config_entry(hass, config_entry)
-    loxconfig = miniserver.lox_config.json
+    loxconfig = miniserver.api.json
     covers = []
 
     for cover in get_all_covers(loxconfig):

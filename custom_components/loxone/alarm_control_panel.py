@@ -28,7 +28,8 @@ from homeassistant.const import (
 )
 
 from . import LoxoneEntity
-from .const import DOMAIN, EVENT, SECUREDSENDDOMAIN, SENDDOMAIN
+from .const import SECUREDSENDDOMAIN, SENDDOMAIN, DOMAIN, EVENT
+
 from .helpers import (
     get_all_alarm,
     get_cat_name_from_cat_uuid,
@@ -59,7 +60,7 @@ async def async_setup_platform(hass, config, async_add_devices, discovery_info=N
 async def async_setup_entry(hass, config_entry, async_add_devices):
     """Set up Loxone Alarms."""
     miniserver = get_miniserver_from_config_entry(hass, config_entry)
-    loxconfig = miniserver.lox_config.json
+    loxconfig = miniserver.api.json
     devices = []
     for loxone_alarm in get_all_alarm(loxconfig):
         loxone_alarm.update(

@@ -47,7 +47,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     generate_subcontrols = config_entry.options.get(
         "generate_lightcontroller_subcontrols", False
     )
-    loxconfig = miniserver.lox_config.json
+    loxconfig = miniserver.api.json
     entites = []
     all_light_controller_dimmers = []
     all_color_picker = []

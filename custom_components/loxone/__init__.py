@@ -22,27 +22,30 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.discovery import async_load_platform
 from homeassistant.helpers.entity import Entity
 
-from .api import LoxApp, LoxWs
-from .const import (AES_KEY_SIZE, ATTR_AREA_CREATE, ATTR_CODE, ATTR_COMMAND,
-                    ATTR_UUID, ATTR_VALUE, CMD_AUTH_WITH_TOKEN,
-                    CMD_ENABLE_UPDATES, CMD_ENCRYPT_CMD, CMD_GET_KEY,
-                    CMD_GET_KEY_AND_SALT, CMD_GET_PUBLIC_KEY,
-                    CMD_GET_VISUAL_PASSWD, CMD_KEY_EXCHANGE, CMD_REFRESH_TOKEN,
-                    CMD_REFRESH_TOKEN_JSON_WEB, CMD_REQUEST_TOKEN,
-                    CMD_REQUEST_TOKEN_JSON_WEB,
-                    CONF_LIGHTCONTROLLER_SUBCONTROLS_GEN, CONF_SCENE_GEN,
-                    CONF_SCENE_GEN_DELAY, DEFAULT, DEFAULT_DELAY_SCENE,
-                    DEFAULT_PORT, DEFAULT_TOKEN_PERSIST_NAME, DOMAIN,
-                    DOMAIN_DEVICES, ERROR_VALUE, EVENT, IV_BYTES,
-                    KEEP_ALIVE_PERIOD, LOXAPPPATH, LOXONE_PLATFORMS,
-                    SALT_BYTES, SALT_MAX_AGE_SECONDS, SALT_MAX_USE_COUNT,
-                    SECUREDSENDDOMAIN, SENDDOMAIN, TIMEOUT, TOKEN_PERMISSION,
-                    TOKEN_REFRESH_DEFAULT_SECONDS, TOKEN_REFRESH_RETRY_COUNT,
-                    TOKEN_REFRESH_SECONDS_BEFORE_EXPIRY, cfmt)
 from .helpers import get_miniserver_type
 from .miniserver import MiniServer, get_miniserver_from_config_entry
 
 REQUIREMENTS = ["websockets", "pycryptodome", "numpy", "requests_async"]
+
+from .const import (
+    ATTR_CODE,
+    ATTR_COMMAND,
+    ATTR_UUID,
+    ATTR_VALUE,
+    DOMAIN_DEVICES,
+    SECUREDSENDDOMAIN,
+    SENDDOMAIN,
+    CONF_LIGHTCONTROLLER_SUBCONTROLS_GEN,
+    CONF_SCENE_GEN_DELAY,
+    cfmt,
+    LOXONE_PLATFORMS,
+    CONF_SCENE_GEN,
+    DEFAULT,
+    DOMAIN,
+    DEFAULT_DELAY_SCENE,
+    DEFAULT_PORT,
+    EVENT,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -175,36 +178,12 @@ async def async_setup_entry(hass, config_entry):
         device_uuid = call.data.get(ATTR_UUID, DEFAULT)
         await miniserver.api.send_websocket_command(device_uuid, value)
 
-    async def sync_areas_with_loxone(data={}):
-        create_areas = data.get(ATTR_AREA_CREATE, DEFAULT)
-        if create_areas not in [True, False]:
-            create_areas = False
-        lox_items = []
-        er_registry = er.async_get(hass)
-        ar_registry = ar.async_get(hass)
-        for id, entry in er_registry.entities.items():
-            if entry.platform == DOMAIN:
-                state = hass.states.get(entry.entity_id)
-                if hasattr(state, "attributes") and "room" in state.attributes:
-                    area = ar_registry.async_get_area_by_name(state.attributes["room"])
-                    if area is None and create_areas:
-                        area = ar_registry.async_get_or_create(state.attributes["room"])
-                    if area and entry.area_id is None:
-                        lox_items.append((entry.entity_id, area.id))
-
-        for _ in lox_items:
-            er_registry.async_update_entity(_[0], area_id=_[1])
-
-    async def handle_sync_areas_with_loxone(call):
-        await sync_areas_with_loxone(call.data)
-
     async def loxone_discovered(event):
         if "component" in event.data:
             if event.data["component"] == DOMAIN:
                 try:
                     _LOGGER.info("loxone discovered")
                     await asyncio.sleep(0.1)
-                    # await sync_areas_with_loxone()
                     entity_ids = hass.states.async_all()
                     sensors_analog = []
                     sensors_digital = []
@@ -309,8 +288,6 @@ async def async_setup_entry(hass, config_entry):
     hass.services.async_register(
         DOMAIN, "event_websocket_command", handle_websocket_command
     )
-
-    hass.services.async_register(DOMAIN, "sync_areas", handle_sync_areas_with_loxone)
 
     return True
 
