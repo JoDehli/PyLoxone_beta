@@ -1,5 +1,6 @@
 import logging
 import traceback
+import os
 
 from homeassistant.config import get_default_config_dir
 from homeassistant.const import (CONF_HOST, CONF_PASSWORD, CONF_PORT,
@@ -102,12 +103,15 @@ class MiniServer:
                 password=self.config_entry.options[CONF_PASSWORD],
             )
             await self.api.getJson()
-            self.api.config_dir = get_default_config_dir()
+            # self.api.config_dir = get_default_config_dir()
+            self.api.config_dir = ""
             await self.api.async_init()
 
         except ConnectionError:
             _LOGGER.error("Error connecting to loxone miniserver. See error log.")
             return False
+        except:
+            traceback.print_exc()
         return True
 
     async def async_set_callback(self, message_callback):
