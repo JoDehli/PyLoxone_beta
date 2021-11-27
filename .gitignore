@@ -5,6 +5,7 @@
 deps
 tts
 venv
+core
 
 hass.py
 
