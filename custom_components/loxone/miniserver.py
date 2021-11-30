@@ -1,12 +1,10 @@
 import logging
 import traceback
-import os
 
-from homeassistant.config import get_default_config_dir
 from homeassistant.const import (CONF_HOST, CONF_PASSWORD, CONF_PORT,
                                  CONF_USERNAME)
 from homeassistant.core import callback
-from pyloxone_api import LoxAPI
+from .pyloxone_api import LoxAPI
 
 from .const import (ATTR_CODE, ATTR_UUID, ATTR_VALUE, DEFAULT, DOMAIN, EVENT,
                     SECUREDSENDDOMAIN, SENDDOMAIN)

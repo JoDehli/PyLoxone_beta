@@ -1,0 +1,8 @@
+
+
+
+import time
+
+t = b'\x03\x06\x00\x00\x00\x00\x00\x00'
+
+print(t)
