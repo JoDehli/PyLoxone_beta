@@ -23,7 +23,8 @@ from homeassistant.helpers.discovery import async_load_platform
 from homeassistant.helpers.entity import Entity
 
 from .helpers import get_miniserver_type
-from .miniserver import MiniServer, get_miniserver_from_config_entry
+from .pyloxone_api.miniserver import MiniServer
+#from .miniserver import MiniServer, get_miniserver_from_config_entry
 
 REQUIREMENTS = ["websockets", "pycryptodome", "numpy", "requests_async"]
 
@@ -134,6 +135,11 @@ async def async_setup_entry(hass, config_entry):
     setup_succeded = await miniserver.async_setup()
     if not setup_succeded:
         return False
+
+    connection_status = None
+    miniserver.connect(loop = asyncio.get_running_loop(),
+                       connection_status=connection_status
+                       )
 
     print("d")
 

@@ -1,9 +1,90 @@
 from __future__ import annotations
 
+import asyncio
+import hashlib
+import json
+import logging
+import queue
+import ssl
+import time
+import urllib.parse
+from base64 import b64decode, b64encode
+from collections import namedtuple
+from typing import Any, Callable, NoReturn
+
+import httpx
+import websockets as wslib
+from Crypto.Cipher import AES, PKCS1_v1_5
+from Crypto.Hash import HMAC, SHA1, SHA256
+from Crypto.PublicKey import RSA
+from Crypto.Random import get_random_bytes
+from Crypto.Util import Padding
+
+from .const import (
+    AES_KEY_SIZE,
+    CMD_AUTH_WITH_TOKEN,
+    CMD_ENABLE_UPDATES,
+    CMD_ENCRYPT_CMD,
+    CMD_GET_KEY,
+    CMD_GET_KEY_AND_SALT,
+    CMD_GET_PUBLIC_KEY,
+    CMD_GET_VISUAL_PASSWD,
+    CMD_KEY_EXCHANGE,
+    CMD_REFRESH_TOKEN,
+    CMD_REFRESH_TOKEN_JSON_WEB,
+    CMD_REQUEST_TOKEN,
+    CMD_REQUEST_TOKEN_JSON_WEB,
+    DEFAULT_TOKEN_PERSIST_NAME,
+    IV_BYTES,
+    KEEP_ALIVE_PERIOD,
+    LOXAPPPATH,
+    MAX_REFRESH_DELAY,
+    SALT_BYTES,
+    SALT_MAX_AGE_SECONDS,
+    SALT_MAX_USE_COUNT,
+    THROTTLE_CHECK_TOKEN_STILL_VALID,
+    TIMEOUT,
+    TOKEN_PERMISSION,
+)
+
+from .message import LLResponse, TextMessage
+from .exceptions import LoxoneException, LoxoneHTTPStatusError, LoxoneRequestError
+from .wsclient import WSClient
+
 import logging
 import traceback
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def raise_if_not_200(response: httpx.Response) -> None:
+    """An httpx event hook, to ensure that http responses other than 200
+    raise an exception"""
+    # Loxone response codes are a bit odd. It is not clear whether a response which
+    # is not 200 is ever OK (eg it is unclear whether redirect response are issued).
+    # json responses also have a "Code" key, but it is unclear whether this is ever
+    # different from the http response code. At the moment, we ignore it.
+    #
+    # And there are references to non-standard codes in the docs (eg a 900 error).
+    # At present, treat any non-200 code as an exception.
+    if response.status_code != 200:
+        if response.is_stream_consumed:
+            raise LoxoneHTTPStatusError(
+                f"Code {response.status_code}. Miniserver response was {response.text}"
+            )
+        else:
+            raise LoxoneHTTPStatusError(
+                f"Miniserver response code {response.status_code}"
+            )
+
+
+def get_public_key(public_key):
+    try:
+        return PKCS1_v1_5.new(RSA.importKey(public_key))
+    except ValueError as exc:
+        _LOGGER.error(f"Error creating RSA cipher: {exc}")
+        raise LoxoneException(exc)
+    return False
 
 
 class MiniServer:
@@ -15,38 +96,178 @@ class MiniServer:
         port=None,
         username=None,
         password=None,
-        publickey=None,
-        privatekey=None,
-        key=None,
-        iv=None,
     ):
         """Initialize Miniserver class."""
-        self.host: str = host
-        self.port: int = port
-        self.username: str = username
-        self.password: str = password
-        self.message_header = None
+        self._host: str = host
+        self._port: int = port
+        self._username: str = username
+        self._password: str = password
+
+        self._use_tls = False
+        self._https_status = None
+        self._tls_check_hostname: bool = True
+        self._local = None
+        self._iv = get_random_bytes(IV_BYTES)
+        self._key = get_random_bytes(AES_KEY_SIZE)
+        self._public_key: str = None
+        self._session_key = None
+
         self.message_body = None
-        self.api: LoxAPI | None = None
+        self.message_header = None
+
+        self.json = None
+        self.snr: str = ""
+
+        self.version: str = ""  # a string, eg "12.0.1.2"
+        self._version: list[int] = []  # a list of ints eg [12,0,1,2]
+        self._https_status: int | None = (
+            None  # None = no TLS, 1 = TLS available, 2 = cert expired
+        )
+
+        # self.api: LoxAPI | None = None
+
+    def connect(self, loop, connection_status):
+        """Connect to the miniserver."""
+
+        self.loop = loop
+        self.async_connection_status_callback = connection_status
+
+        self.wsclient = WSClient(
+            self.loop,
+            self._host,
+            self._port,
+            self._username,
+            self._password,
+            self._use_tls,
+            self.async_session_handler,
+            self.async_message_handler,
+        )
+        self.wsclient.start()
+
+        _LOGGER.debug("Finished connect")
+
+    def async_session_handler(self, state):
+        _LOGGER.debug("async_session_handler")
+        _LOGGER.debug("state: {0}".format(state))
+        if state == "running":
+            command = f"{CMD_KEY_EXCHANGE}{self._session_key.decode()}"
+            self.wsclient.send(command)
+
+    def async_message_handler(self):
+        pass
+
+    async def get_json(self) -> bool:
+        """Obtain basic info from the miniserver"""
+        # All initial http/https requests are carried out here, for simplicity. They
+        # can all use the same httpx.AsyncClient instance. Any non-200 response from
+        # the miniserver will cause an exception to be raised, via the event_hook
+        scheme = "https" if self._use_tls else "http"
+        auth = None
+
+        if self._port == "80":
+            _base_url = f"{scheme}://{self._host}"
+        else:
+            _base_url = f"{scheme}://{self._host}:{self._port}"
+
+        if self._username is not None and self._password is not None:
+            auth = (self._username, self._password)
+
+        client = httpx.AsyncClient(
+            auth=auth,
+            base_url=_base_url,
+            verify=self._tls_check_hostname,
+            timeout=TIMEOUT,
+            event_hooks={"response": [raise_if_not_200]},
+        )
+
+        try:
+            api_resp = await client.get("/jdev/cfg/apiKey")
+            value = LLResponse(api_resp.text).value
+            # The json returned by the miniserver is invalid. It contains " and '.
+            # We need to normalise it
+            value = json.loads(value.replace("'", '"'))
+            self._https_status = value.get("httpsStatus")
+            self.version = value.get("version")
+            self._version = (
+                [int(x) for x in self.version.split(".")] if self.version else []
+            )
+            self.snr = value.get("snr")
+            self._local = value.get("local", True)
+            if not self._local:
+                _base_url = str(api_resp.url).replace("/jdev/cfg/apiKey", "")
+                client = httpx.AsyncClient(
+                    auth=auth,
+                    base_url=_base_url,
+                    verify=self._tls_check_hostname,
+                    timeout=TIMEOUT,
+                    event_hooks={"response": [raise_if_not_200]},
+                )
+
+            # Get the structure file
+            loxappdata = await client.get(LOXAPPPATH)
+            status = loxappdata.status_code
+            if status == 200:
+                self.json = loxappdata.json()
+                self.json[
+                    "softwareVersion"
+                ] = self._version  # FIXME Legacy use only. Need to fix pyloxone
+            else:
+                return False
+            # Get the public key
+            pk_data = await client.get(CMD_GET_PUBLIC_KEY)
+            pk = LLResponse(pk_data.text).value
+            # Loxone returns a certificate instead of a key, and the certificate is not
+            # properly PEM encoded because it does not contain newlines before/after the
+            # boundaries. We need to fix both problems. Proper PEM encoding requires 64
+            # char line lengths throughout, but Python does not seem to insist on this.
+            # If, for some reason, no certificate is returned, _public_key will be an
+            # empty string.
+            self._public_key = pk.replace(
+                "-----BEGIN CERTIFICATE-----", "-----BEGIN PUBLIC KEY-----\n"
+            ).replace("-----END CERTIFICATE-----", "\n-----END PUBLIC KEY-----\n")
+
+        # Handle errors. An http error getting any of the required data is
+        # probably fatal, so log it and raise it for handling elsewhere. Other errors
+        # are (hopefully) unlikely, but are not handled here, so will be raised
+        # normally.
+        except httpx.RequestError as exc:
+            _LOGGER.error(
+                f'An error "{exc}" occurred while requesting {exc.request.url!r}.'
+            )
+            raise LoxoneRequestError(exc) from None
+        except LoxoneHTTPStatusError as exc:
+            _LOGGER.error(exc)
+            raise LoxoneHTTPStatusError(exc) from None
+        except Exception:
+            traceback.print_exc()
+        finally:
+            # Async httpx client must always be closed
+            await client.aclose()
+            return True
 
     async def async_setup(self) -> bool:
-        self.api = LoxAPI(
-            host=self.host, port=self.port, user=self.username, password=self.password
-        )
-        json_res = await self.api.get_json()
+        json_res = await self.get_json()
         if not json_res:
-            _LOGGER.error("Error getting public key and config jsson.")
+            _LOGGER.error("Error getting public key and config json.")
             return False
 
-        res_init = await self.api.async_init()
-        if not res_init:
-            _LOGGER.error("Error initialisation.")
+        rsa_cipher = get_public_key(self._public_key)
+        if not rsa_cipher:
             return False
+
+        aes_key = self._key.hex()
+        iv = self._iv.hex()
+        try:
+            session_key = f"{aes_key}:{iv}".encode("utf-8")
+            self._session_key = b64encode(rsa_cipher.encrypt(session_key))
+            _LOGGER.debug("generate_session_key successfully...")
+        except ValueError as exc:
+            _LOGGER.error(f"Error generating session key: {exc}")
+            raise LoxoneException(exc) from None
         return True
 
 
-
-
+'''
 
 class MiniServer2:
     def __init__(self, hass, config_entry) -> None:
@@ -192,3 +413,4 @@ class MiniServer2:
     def miniserverid(self) -> str:
         """Return the unique identifier of the Miniserver."""
         return self.config_entry.unique_id
+'''
