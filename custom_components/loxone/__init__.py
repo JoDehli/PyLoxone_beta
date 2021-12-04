@@ -125,155 +125,165 @@ async def async_setup_entry(hass, config_entry):
     if not config_entry.options:
         await async_set_options(hass, config_entry)
 
-    miniserver = MiniServer(hass, config_entry)
 
-    if not await miniserver.async_setup():
+    miniserver = MiniServer(host=config_entry.options.get("host"),
+                            port=config_entry.options.get("port"),
+                            username=config_entry.options.get("username"),
+                            password=config_entry.options.get("password")
+                            )
+    setup_succeded = await miniserver.async_setup()
+    if not setup_succeded:
         return False
 
-    for platform in LOXONE_PLATFORMS:
-        _LOGGER.debug("starting loxone {}...".format(platform))
-        hass.async_create_task(
-            hass.config_entries.async_forward_entry_setup(config_entry, platform)
-        )
-        hass.async_create_task(
-            async_load_platform(hass, platform, DOMAIN, {}, config_entry)
-        )
+    print("d")
 
-    config_entry.add_update_listener(async_config_entry_updated)
-
-    new_data = _UNDEF
-
-    if config_entry.unique_id is None:
-        hass.config_entries.async_update_entry(
-            config_entry, unique_id=miniserver.serial, data=new_data
-        )
-        # Workaround
-        await asyncio.sleep(5)
-
-    hass.data[DOMAIN][config_entry.unique_id] = miniserver
-
-    await miniserver.async_update_device_registry()
-
-    async def message_callback(message):
-        """Fire message on HomeAssistant Bus."""
-        hass.bus.async_fire(EVENT, message)
-
-    async def handle_websocket_command(call):
-        """Handle websocket command services."""
-        value = call.data.get(ATTR_VALUE, DEFAULT)
-        device_uuid = call.data.get(ATTR_UUID, DEFAULT)
-        await miniserver.api.send_websocket_command(device_uuid, value)
-
-    async def loxone_discovered(event):
-        if "component" in event.data:
-            if event.data["component"] == DOMAIN:
-                try:
-                    _LOGGER.info("loxone discovered")
-                    await asyncio.sleep(0.1)
-                    entity_ids = hass.states.async_all()
-                    sensors_analog = []
-                    sensors_digital = []
-                    switches = []
-                    covers = []
-                    lights = []
-                    climates = []
-
-                    for s in entity_ids:
-                        s_dict = s.as_dict()
-                        attr = s_dict["attributes"]
-                        if "plattform" in attr and attr["plattform"] == DOMAIN:
-                            device_typ = attr.get("device_typ", "")
-                            if device_typ == "analog_sensor":
-                                sensors_analog.append(s_dict["entity_id"])
-                            elif device_typ == "digital_sensor":
-                                sensors_digital.append(s_dict["entity_id"])
-                            elif device_typ in ["Jalousie", "Gate", "Window"]:
-                                covers.append(s_dict["entity_id"])
-                            elif device_typ in ["Switch", "Pushbutton", "TimedSwitch"]:
-                                switches.append(s_dict["entity_id"])
-                            elif device_typ in ["LightControllerV2", "Dimmer"]:
-                                lights.append(s_dict["entity_id"])
-                            elif device_typ == "IRoomControllerV2":
-                                climates.append(s_dict["entity_id"])
-
-                    sensors_analog.sort()
-                    sensors_digital.sort()
-                    covers.sort()
-                    switches.sort()
-                    lights.sort()
-                    climates.sort()
-
-                    await group.Group.async_create_group(
-                        hass,
-                        "Loxone Analog Sensors",
-                        object_id="loxone_analog",
-                        entity_ids=sensors_analog,
-                    )
-
-                    await group.Group.async_create_group(
-                        hass,
-                        "Loxone Digital Sensors",
-                        object_id="loxone_digital",
-                        entity_ids=sensors_digital,
-                    )
-
-                    await group.Group.async_create_group(
-                        hass,
-                        "Loxone Switches",
-                        object_id="loxone_switches",
-                        entity_ids=switches,
-                    )
-
-                    await group.Group.async_create_group(
-                        hass,
-                        "Loxone Covers",
-                        object_id="loxone_covers",
-                        entity_ids=covers,
-                    )
-
-                    await group.Group.async_create_group(
-                        hass,
-                        "Loxone Lights",
-                        object_id="loxone_lights",
-                        entity_ids=lights,
-                    )
-
-                    await group.Group.async_create_group(
-                        hass,
-                        "Loxone Room Controllers",
-                        object_id="loxone_climates",
-                        entity_ids=climates,
-                    )
-
-                    await hass.async_block_till_done()
-
-                    await group.Group.async_create_group(
-                        hass,
-                        "Loxone Group",
-                        object_id="loxone_group",
-                        entity_ids=[
-                            "group.loxone_analog",
-                            "group.loxone_digital",
-                            "group.loxone_switches",
-                            "group.loxone_covers",
-                            "group.loxone_lights",
-                        ],
-                    )
-                except:
-                    traceback.print_exc()
-
-    await miniserver.async_set_callback(message_callback)
-
-    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, miniserver.start_loxone)
-    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, miniserver.stop_loxone)
-    hass.bus.async_listen_once(EVENT_COMPONENT_LOADED, loxone_discovered)
-
-    hass.bus.async_listen(SENDDOMAIN, miniserver.listen_loxone_send)
-    hass.bus.async_listen(SECUREDSENDDOMAIN, miniserver.listen_loxone_send)
-
-    hass.services.async_register(
-        DOMAIN, "event_websocket_command", handle_websocket_command
-    )
+    # if not await miniserver.async_setup():
+    #     return False
+    #
+    # for platform in LOXONE_PLATFORMS:
+    #     _LOGGER.debug("starting loxone {}...".format(platform))
+    #     hass.async_create_task(
+    #         hass.config_entries.async_forward_entry_setup(config_entry, platform)
+    #     )
+    #     hass.async_create_task(
+    #         async_load_platform(hass, platform, DOMAIN, {}, config_entry)
+    #     )
+    #
+    # config_entry.add_update_listener(async_config_entry_updated)
+    #
+    # new_data = _UNDEF
+    #
+    # if config_entry.unique_id is None:
+    #     hass.config_entries.async_update_entry(
+    #         config_entry, unique_id=miniserver.serial, data=new_data
+    #     )
+    #     # Workaround
+    #     await asyncio.sleep(5)
+    #
+    # hass.data[DOMAIN][config_entry.unique_id] = miniserver
+    #
+    # await miniserver.async_update_device_registry()
+    #
+    # async def message_callback(message):
+    #     """Fire message on HomeAssistant Bus."""
+    #     hass.bus.async_fire(EVENT, message)
+    #
+    # async def handle_websocket_command(call):
+    #     """Handle websocket command services."""
+    #     value = call.data.get(ATTR_VALUE, DEFAULT)
+    #     device_uuid = call.data.get(ATTR_UUID, DEFAULT)
+    #     await miniserver.api.send_websocket_command(device_uuid, value)
+    #
+    # async def loxone_discovered(event):
+    #     if "component" in event.data:
+    #         if event.data["component"] == DOMAIN:
+    #             try:
+    #                 _LOGGER.info("loxone discovered")
+    #                 await asyncio.sleep(0.1)
+    #                 entity_ids = hass.states.async_all()
+    #                 sensors_analog = []
+    #                 sensors_digital = []
+    #                 switches = []
+    #                 covers = []
+    #                 lights = []
+    #                 climates = []
+    #
+    #                 for s in entity_ids:
+    #                     s_dict = s.as_dict()
+    #                     attr = s_dict["attributes"]
+    #                     if "plattform" in attr and attr["plattform"] == DOMAIN:
+    #                         device_typ = attr.get("device_typ", "")
+    #                         if device_typ == "analog_sensor":
+    #                             sensors_analog.append(s_dict["entity_id"])
+    #                         elif device_typ == "digital_sensor":
+    #                             sensors_digital.append(s_dict["entity_id"])
+    #                         elif device_typ in ["Jalousie", "Gate", "Window"]:
+    #                             covers.append(s_dict["entity_id"])
+    #                         elif device_typ in ["Switch", "Pushbutton", "TimedSwitch"]:
+    #                             switches.append(s_dict["entity_id"])
+    #                         elif device_typ in ["LightControllerV2", "Dimmer"]:
+    #                             lights.append(s_dict["entity_id"])
+    #                         elif device_typ == "IRoomControllerV2":
+    #                             climates.append(s_dict["entity_id"])
+    #
+    #                 sensors_analog.sort()
+    #                 sensors_digital.sort()
+    #                 covers.sort()
+    #                 switches.sort()
+    #                 lights.sort()
+    #                 climates.sort()
+    #
+    #                 await group.Group.async_create_group(
+    #                     hass,
+    #                     "Loxone Analog Sensors",
+    #                     object_id="loxone_analog",
+    #                     entity_ids=sensors_analog,
+    #                 )
+    #
+    #                 await group.Group.async_create_group(
+    #                     hass,
+    #                     "Loxone Digital Sensors",
+    #                     object_id="loxone_digital",
+    #                     entity_ids=sensors_digital,
+    #                 )
+    #
+    #                 await group.Group.async_create_group(
+    #                     hass,
+    #                     "Loxone Switches",
+    #                     object_id="loxone_switches",
+    #                     entity_ids=switches,
+    #                 )
+    #
+    #                 await group.Group.async_create_group(
+    #                     hass,
+    #                     "Loxone Covers",
+    #                     object_id="loxone_covers",
+    #                     entity_ids=covers,
+    #                 )
+    #
+    #                 await group.Group.async_create_group(
+    #                     hass,
+    #                     "Loxone Lights",
+    #                     object_id="loxone_lights",
+    #                     entity_ids=lights,
+    #                 )
+    #
+    #                 await group.Group.async_create_group(
+    #                     hass,
+    #                     "Loxone Room Controllers",
+    #                     object_id="loxone_climates",
+    #                     entity_ids=climates,
+    #                 )
+    #
+    #                 await hass.async_block_till_done()
+    #
+    #                 await group.Group.async_create_group(
+    #                     hass,
+    #                     "Loxone Group",
+    #                     object_id="loxone_group",
+    #                     entity_ids=[
+    #                         "group.loxone_analog",
+    #                         "group.loxone_digital",
+    #                         "group.loxone_switches",
+    #                         "group.loxone_covers",
+    #                         "group.loxone_lights",
+    #                     ],
+    #                 )
+    #             except:
+    #                 traceback.print_exc()
+    #
+    # await miniserver.async_set_callback(message_callback)
+    #
+    # hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, miniserver.start_loxone)
+    # hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, miniserver.stop_loxone)
+    # hass.bus.async_listen_once(EVENT_COMPONENT_LOADED, loxone_discovered)
+    #
+    # hass.bus.async_listen(SENDDOMAIN, miniserver.listen_loxone_send)
+    # hass.bus.async_listen(SECUREDSENDDOMAIN, miniserver.listen_loxone_send)
+    #
+    # hass.services.async_register(
+    #     DOMAIN, "event_websocket_command", handle_websocket_command
+    # )
 
     return True
 

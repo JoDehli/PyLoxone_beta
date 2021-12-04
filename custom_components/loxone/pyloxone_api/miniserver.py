@@ -1,40 +1,54 @@
+from __future__ import annotations
+
 import logging
 import traceback
 
-from homeassistant.const import (CONF_HOST, CONF_PASSWORD, CONF_PORT,
-                                 CONF_USERNAME)
-from homeassistant.core import callback
-from .pyloxone_api import LoxAPI
-
-from .const import (ATTR_CODE, ATTR_UUID, ATTR_VALUE, DEFAULT, DOMAIN, EVENT,
-                    SECUREDSENDDOMAIN, SENDDOMAIN)
-from .helpers import get_miniserver_type
-
 _LOGGER = logging.getLogger(__name__)
-CONNECTION_NETWORK_MAC = "mac"
-
-NEW_GROUP = "groups"
-NEW_LIGHT = "lights"
-NEW_SCENE = "scenes"
-NEW_SENSOR = "sensors"
-NEW_COVERS = "covers"
-
-
-@callback
-def get_miniserver_from_config_entry(hass, config_entry):
-    """Return Miniserver with a matching bridge id."""
-    return hass.data[DOMAIN][config_entry.unique_id]
-
-
-@callback
-def get_miniserver_from_config(hass, config):
-    """Return first Miniserver. Only one Miniserver is allowed"""
-    if len(config) == 0:
-        return None
-    return config[next(iter(config))]
 
 
 class MiniServer:
+    """This class connects to the Loxone Miniserver."""
+
+    def __init__(
+        self,
+        host=None,
+        port=None,
+        username=None,
+        password=None,
+        publickey=None,
+        privatekey=None,
+        key=None,
+        iv=None,
+    ):
+        """Initialize Miniserver class."""
+        self.host: str = host
+        self.port: int = port
+        self.username: str = username
+        self.password: str = password
+        self.message_header = None
+        self.message_body = None
+        self.api: LoxAPI | None = None
+
+    async def async_setup(self) -> bool:
+        self.api = LoxAPI(
+            host=self.host, port=self.port, user=self.username, password=self.password
+        )
+        json_res = await self.api.get_json()
+        if not json_res:
+            _LOGGER.error("Error getting public key and config jsson.")
+            return False
+
+        res_init = await self.api.async_init()
+        if not res_init:
+            _LOGGER.error("Error initialisation.")
+            return False
+        return True
+
+
+
+
+
+class MiniServer2:
     def __init__(self, hass, config_entry) -> None:
         self.hass = hass
         self.config_entry = config_entry

@@ -61,7 +61,173 @@ from .loxtoken import LoxToken
 _LOGGER = logging.getLogger(__name__)
 
 
+def get_public_key(public_key):
+    try:
+        return PKCS1_v1_5.new(RSA.importKey(public_key))
+    except ValueError as exc:
+        _LOGGER.error(f"Error creating RSA cipher: {exc}")
+        raise LoxoneException(exc)
+    return False
+
+
 class LoxAPI:
+    def __init__(
+        self,
+        host: str = "",
+        port: int = 80,
+        user: str | None = None,
+        password: str | None = None,
+        use_tls: bool = False,
+        token_persist_filename: str = DEFAULT_TOKEN_PERSIST_NAME,
+    ):
+        self._host = host
+        self._port = port
+        self._user = user
+        self._password = password
+        self._use_tls = use_tls
+        # If use_tls is True, certificate hostnames will be checked. This means that
+        # an IP address cannot be used as a hostname. Set _tls_check_hostname to false
+        # to disable this check. This creates a SECURITY RISK.
+
+        self._session_key = None
+        self._public_key = ""
+        self._iv = get_random_bytes(IV_BYTES)
+        self._key = get_random_bytes(AES_KEY_SIZE)
+
+        self._tls_check_hostname: bool = True
+        self.json = None
+        self.snr: str = ""
+        self.version: str = ""  # a string, eg "12.0.1.2"
+        self._version: list[int] = []  # a list of ints eg [12,0,1,2]
+        self._https_status: int | None = (
+            None  # None = no TLS, 1 = TLS available, 2 = cert expired
+        )
+
+    async def _raise_if_not_200(self, response: httpx.Response) -> None:
+        """An httpx event hook, to ensure that http responses other than 200
+        raise an exception"""
+        # Loxone response codes are a bit odd. It is not clear whether a response which
+        # is not 200 is ever OK (eg it is unclear whether redirect response are issued).
+        # json responses also have a "Code" key, but it is unclear whether this is ever
+        # different from the http response code. At the moment, we ignore it.
+        #
+        # And there are references to non-standard codes in the docs (eg a 900 error).
+        # At present, treat any non-200 code as an exception.
+        if response.status_code != 200:
+            if response.is_stream_consumed:
+                raise LoxoneHTTPStatusError(
+                    f"Code {response.status_code}. Miniserver response was {response.text}"
+                )
+            else:
+                raise LoxoneHTTPStatusError(
+                    f"Miniserver response code {response.status_code}"
+                )
+
+    async def get_json(self) -> bool:
+        """Obtain basic info from the miniserver"""
+        # All initial http/https requests are carried out here, for simplicity. They
+        # can all use the same httpx.AsyncClient instance. Any non-200 response from
+        # the miniserver will cause an exception to be raised, via the event_hook
+        scheme = "https" if self._use_tls else "http"
+        auth = None
+
+        if self._port == "80":
+            _base_url = f"{scheme}://{self._host}"
+        else:
+            _base_url = f"{scheme}://{self._host}:{self._port}"
+        if self._user is not None and self._password is not None:
+            auth = (self._user, self._password)
+        client = httpx.AsyncClient(
+            auth=auth,
+            base_url=_base_url,
+            verify=self._tls_check_hostname,
+            timeout=TIMEOUT,
+            event_hooks={"response": [self._raise_if_not_200]},
+        )
+
+        try:
+            api_resp = await client.get("/jdev/cfg/apiKey")
+            value = LLResponse(api_resp.text).value
+            # The json returned by the miniserver is invalid. It contains " and '.
+            # We need to normalise it
+            value = json.loads(value.replace("'", '"'))
+            self._https_status = value.get("httpsStatus")
+            self.version = value.get("version")
+            self._version = (
+                [int(x) for x in self.version.split(".")] if self.version else []
+            )
+            self.snr = value.get("snr")
+            self._local = value.get("local", True)
+            if not self._local:
+                _base_url = str(api_resp.url).replace("/jdev/cfg/apiKey", "")
+                client = httpx.AsyncClient(
+                    auth=auth,
+                    base_url=_base_url,
+                    verify=self._tls_check_hostname,
+                    timeout=TIMEOUT,
+                    event_hooks={"response": [self._raise_if_not_200]},
+                )
+
+            # Get the structure file
+            loxappdata = await client.get(LOXAPPPATH)
+            status = loxappdata.status_code
+            if status == 200:
+                self.json = loxappdata.json()
+                self.json[
+                    "softwareVersion"
+                ] = self._version  # FIXME Legacy use only. Need to fix pyloxone
+            else:
+                return False
+            # Get the public key
+            pk_data = await client.get(CMD_GET_PUBLIC_KEY)
+            pk = LLResponse(pk_data.text).value
+            # Loxone returns a certificate instead of a key, and the certificate is not
+            # properly PEM encoded because it does not contain newlines before/after the
+            # boundaries. We need to fix both problems. Proper PEM encoding requires 64
+            # char line lengths throughout, but Python does not seem to insist on this.
+            # If, for some reason, no certificate is returned, _public_key will be an
+            # empty string.
+            self._public_key = pk.replace(
+                "-----BEGIN CERTIFICATE-----", "-----BEGIN PUBLIC KEY-----\n"
+            ).replace("-----END CERTIFICATE-----", "\n-----END PUBLIC KEY-----\n")
+
+        # Handle errors. An http error getting any of the required data is
+        # probably fatal, so log it and raise it for handling elsewhere. Other errors
+        # are (hopefully) unlikely, but are not handled here, so will be raised
+        # normally.
+        except httpx.RequestError as exc:
+            _LOGGER.error(
+                f'An error "{exc}" occurred while requesting {exc.request.url!r}.'
+            )
+            raise LoxoneRequestError(exc) from None
+        except LoxoneHTTPStatusError as exc:
+            _LOGGER.error(exc)
+            raise LoxoneHTTPStatusError(exc) from None
+        finally:
+            # Async httpx client must always be closed
+            await client.aclose()
+            return True
+
+    async def async_init(self) -> bool:
+        # Init RSA cipher
+        rsa_cipher = get_public_key(self._public_key)
+        if not rsa_cipher:
+            return False
+        aes_key = self._key.hex()
+        iv = self._iv.hex()
+        try:
+            session_key = f"{aes_key}:{iv}".encode("utf-8")
+            self._session_key = rsa_cipher.encrypt(session_key)
+            self._session_key = b64encode(session_key)
+            _LOGGER.debug("generate_session_key successfully...")
+        except ValueError as exc:
+            _LOGGER.error(f"Error generating session key: {exc}")
+            raise LoxoneException(exc) from None
+        return True
+
+
+
+class LoxAPI2:
     def __init__(
         self,
         host: str = "",
@@ -235,7 +401,9 @@ class LoxAPI:
 
     async def _check_refresh_token(self) -> NoReturn:
         while True:
-            seconds_to_refresh = min(self._token.seconds_to_expire()*0.9, MAX_REFRESH_DELAY)
+            seconds_to_refresh = min(
+                self._token.seconds_to_expire() * 0.9, MAX_REFRESH_DELAY
+            )
             await asyncio.sleep(seconds_to_refresh)
             async with self._socket_lock:
                 await self._refresh()
@@ -299,11 +467,13 @@ class LoxAPI:
             await asyncio.sleep(second)
             if self._encryption_ready:
                 async with self._socket_lock:
-                    count +=1
+                    count += 1
                     await self._ws.send("keepalive")
                     response = await self._ws.recv()  # the keepalive response
                     _LOGGER.debug(f"Keepalive response: {response!r}")
-                    if count >= THROTTLE_CHECK_TOKEN_STILL_VALID: # Throttle the check_still_valid
+                    if (
+                        count >= THROTTLE_CHECK_TOKEN_STILL_VALID
+                    ):  # Throttle the check_still_valid
                         _LOGGER.debug(f"Check if token still valid.")
                         await self._check_token_still_valid()
                         count = 0
