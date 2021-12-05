@@ -19,6 +19,8 @@ from Crypto.Hash import HMAC, SHA1, SHA256
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 from Crypto.Util import Padding
+from .message import MessageHeader
+
 
 from .const import (
     AES_KEY_SIZE,
@@ -153,8 +155,39 @@ class MiniServer:
             command = f"{CMD_KEY_EXCHANGE}{self._session_key.decode()}"
             self.wsclient.send(command)
 
-    def async_message_handler(self):
-        pass
+    def async_message_handler(self, message, is_binary):
+        if is_binary:
+            if len(message) == 8 and message[0] == 3:
+                self.message_header = MessageHeader(message)
+
+        else:
+            from .message import parse_message
+            if not message.startswith("{"):
+                # Do the encryption
+                pass
+
+
+            mess_obj = parse_message(message, self.message_header.message_type)
+
+
+            if isinstance(mess_obj, TextMessage) and "keyexchange" in mess_obj.message:
+                pass
+                # wheather load token or get token with getkey2
+                from .loxtoken import LoxToken
+                self._token = LoxToken(
+                    token_dir="",
+                    token_filename=DEFAULT_TOKEN_PERSIST_NAME,
+                )
+                #if self._token.is_loaded
+                loaded = self._token.load()
+
+                command = "jdev/sys/getkey2/" + self.username
+                self.wsclient.send(self.encrypt_command(command))
+
+
+                print("d")
+                #self.message_body = MessageBody(message, False, self.message_header)
+
 
     async def get_json(self) -> bool:
         """Obtain basic info from the miniserver"""

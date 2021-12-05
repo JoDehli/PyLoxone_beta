@@ -68,6 +68,7 @@ class WSClient:
             self.state = STATE_STARTING
             self.loop.create_task(self.running())
 
+
     async def running(self):
         """Start websocket connection."""
         _LOGGER.debug("running")
@@ -88,12 +89,12 @@ class WSClient:
                     _LOGGER.debug(
                         "Websocket BINARY data: {0}".format(binascii.hexlify(msg.data))
                     )
-                    # self.async_message_handler_callback(msg.data, True)
+                    self.async_message_handler_callback(msg.data, True)
                 elif msg.type == aiohttp.WSMsgType.TEXT:
                     # self._data = json.loads(msg.data)
                     # self.async_session_handler_callback('data')
                     _LOGGER.debug("Websocket TEXT data: {0}".format(msg.data))
-                    # self.async_message_handler_callback(msg.data, False)
+                    self.async_message_handler_callback(msg.data, False)
                 elif msg.type == aiohttp.WSMsgType.CLOSED:
                     _LOGGER.debug("CLOSED")
                     break

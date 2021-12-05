@@ -21,6 +21,7 @@ class LoxToken:
         self.hash_alg = hash_alg
         self.token_dir = token_dir
         self.token_filename = token_filename
+        self.load()
 
     def seconds_to_expire(self, valid_until: int=None) -> int:
         # Loxone epoch is 1.1.2009
@@ -32,6 +33,10 @@ class LoxToken:
             return int(valid_until - current_seconds_since_epoch)
         return int(self.valid_until - current_seconds_since_epoch)
 
+    @property
+    def is_loaded(self) -> bool:
+        return self.token != ""
+
     def load(self) -> bool:
         persist_token = os.path.join(self.token_dir, self.token_filename)
         try:
@@ -42,9 +47,9 @@ class LoxToken:
                 self.hash_alg = dict_token["_hash_alg"]
         except (ValueError, KeyError, OSError):
             _LOGGER.debug(f"Cannot load token from {persist_token}")
-            return False
+            self.token = ""
         _LOGGER.debug(f"load_token successfully from {persist_token}")
-        return True
+
 
     def save(self) -> bool:
         try:
