@@ -19,8 +19,8 @@ from Crypto.Hash import HMAC, SHA1, SHA256
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 from Crypto.Util import Padding
-from .message import MessageHeader
-
+from .message import MessageHeader, parse_message
+from .loxtoken import LoxToken
 
 from .const import (
     AES_KEY_SIZE,
@@ -89,6 +89,52 @@ def get_public_key(public_key):
     return False
 
 
+Salt = namedtuple("Salt", ["value", "is_new", "previous"])
+
+
+class _SaltMine:
+    """A salt used for encrypting commands."""
+
+    def __init__(self):
+        self._salt: str = None
+        self._generate_new_salt()
+
+    def _generate_new_salt(self) -> None:
+        self._previous = self._salt
+        self._salt = get_random_bytes(SALT_BYTES).hex()
+        self._timestamp = time.time()
+        self._used_count: int = 0
+        self._is_new: bool = True
+        _LOGGER.debug("Generating a new salt")
+
+    def get_salt(self) -> Salt:
+        """Get the current salt in use, or generate a new one if it has expired
+
+        Returns a namedtuple, with attibutes value (the salt as a hex string),
+        is_new (a boolean indicating whether this is the first time this
+        salt has been returned), and previous (the value of the previous salt, or None).
+        """
+
+        self._used_count += 1
+        self._is_new = False
+        if (
+            self._used_count > SALT_MAX_USE_COUNT
+            or time.time() - self._timestamp > SALT_MAX_AGE_SECONDS
+        ):
+            # the salt has expired. Get a new one.
+            self._previous = self._salt
+            self._generate_new_salt()
+
+        return Salt(self._salt, self._is_new, self._previous)
+
+
+class LxJsonKeySalt:
+    def __init__(self, key=None, salt=None, hash_alg=None):
+        self.key = key
+        self.salt = salt
+        self.hash_alg = hash_alg or "SHA1"
+
+
 class MiniServer:
     """This class connects to the Loxone Miniserver."""
 
@@ -113,6 +159,8 @@ class MiniServer:
         self._key = get_random_bytes(AES_KEY_SIZE)
         self._public_key: str = None
         self._session_key = None
+        self._saltmine = _SaltMine()
+        self._current_key_and_salt = None
 
         self.message_body = None
         self.message_header = None
@@ -155,39 +203,114 @@ class MiniServer:
             command = f"{CMD_KEY_EXCHANGE}{self._session_key.decode()}"
             self.wsclient.send(command)
 
+    def _encrypt(self, command: str) -> str:
+        # if not self._encryption_ready:
+        #     return command
+        salt = self._saltmine.get_salt()
+        if salt.is_new:
+            s = f"nextSalt/{salt.previous}/{salt.value}/{command}\x00"
+        else:
+            s = f"salt/{salt.value}/{command}\x00"
+
+        padded_s = Padding.pad(bytes(s, "utf-8"), 16)
+        aes_cipher = AES.new(self._key, AES.MODE_CBC, self._iv)
+        encrypted = aes_cipher.encrypt(padded_s)
+        encoded = b64encode(encrypted)
+        encoded_url = urllib.parse.quote(encoded.decode("utf-8"))
+        return CMD_ENCRYPT_CMD + encoded_url
+
+    def _hash_credentials(self, key_salt: LxJsonKeySalt):
+        try:
+            pwd_hash_str = f"{self._password}:{key_salt.salt}"
+            if key_salt.hash_alg == "SHA1":
+                m = hashlib.sha1()
+            elif key_salt.hash_alg == "SHA256":
+                m = hashlib.sha256()
+            else:
+                _LOGGER.error(f"Unrecognised hash algorithm: {key_salt.hash_alg}")
+                return None
+
+            m.update(pwd_hash_str.encode("utf-8"))
+            pwd_hash = m.hexdigest().upper()
+            pwd_hash = f"{self._username}:{pwd_hash}"
+
+            if key_salt.hash_alg == "SHA1":
+                digester = HMAC.new(
+                    bytes.fromhex(key_salt.key), pwd_hash.encode("utf-8"), SHA1
+                )
+            elif key_salt.hash_alg == "SHA256":
+                digester = HMAC.new(
+                    bytes.fromhex(key_salt.key), pwd_hash.encode("utf-8"), SHA256
+                )
+            _LOGGER.debug("hash_credentials successfully...")
+            return digester.hexdigest()
+        except ValueError:
+            _LOGGER.error("error hash_credentials...")
+            return None
+
     def async_message_handler(self, message, is_binary):
         if is_binary:
             if len(message) == 8 and message[0] == 3:
                 self.message_header = MessageHeader(message)
 
         else:
-            from .message import parse_message
             if not message.startswith("{"):
                 # Do the encryption
                 pass
 
-
             mess_obj = parse_message(message, self.message_header.message_type)
-
-
             if isinstance(mess_obj, TextMessage) and "keyexchange" in mess_obj.message:
-                pass
-                # wheather load token or get token with getkey2
-                from .loxtoken import LoxToken
+                # Wheather load token or get token with getkey2
                 self._token = LoxToken(
                     token_dir="",
                     token_filename=DEFAULT_TOKEN_PERSIST_NAME,
                 )
-                #if self._token.is_loaded
-                loaded = self._token.load()
 
-                command = "jdev/sys/getkey2/" + self.username
-                self.wsclient.send(self.encrypt_command(command))
+                if self._token.is_loaded and self._token.seconds_to_expire() > 300:
+                    _LOGGER.debug("Token successfully loaded from file")
+                    # token_hash = await self._hash_token()
+                else:
+                    _LOGGER.debug("Token could not load or expired.")
+                    command = f"{CMD_GET_KEY_AND_SALT}{self._username}"
+                    self.wsclient.send(self._encrypt(command))
 
+            elif isinstance(mess_obj, TextMessage) and "getkey2" in mess_obj.message:
+                # Response of CMD_GET_KEY_AND_SALT. Request a new Token
+                self._current_key_and_salt = LxJsonKeySalt(
+                    mess_obj.value_as_dict["key"],
+                    mess_obj.value_as_dict["salt"],
+                    mess_obj.value_as_dict.get("hashAlg", None),
+                )
+                new_hash = self._hash_credentials(self._current_key_and_salt)
+                if new_hash is None:
+                    return
+                if self._version < [10, 2]:
+                    # 'jdev/sys/gettoken/507a4c8d1c89d7bfb35ab7aa34a3865ff8e3b738/dev/2/edfc5f9a-df3f-4cad-9dddcdc42c732be2/pyloxone_api'
+                    command = f"{CMD_REQUEST_TOKEN}{new_hash}/{self._username}/{TOKEN_PERMISSION}/edfc5f9a-df3f-4cad-9dddcdc42c732be2/pyloxone_api"
+                else:
+                    # 'jdev/sys/getjwt/6b30234557c62ee7b0509698ce4857dabcd703fc/dev/2/edfc5f9a-df3f-4cad-9dddcdc42c732be2/pyloxone_api'
+                    command = f"{CMD_REQUEST_TOKEN_JSON_WEB}{new_hash}/{self._username}/{TOKEN_PERMISSION}/edfc5f9a-df3f-4cad-9dddcdc42c732be2/pyloxone_api"
+                self.wsclient.send(self._encrypt(command))
 
-                print("d")
-                #self.message_body = MessageBody(message, False, self.message_header)
+            elif isinstance(mess_obj, TextMessage) and ("gettoken" in mess_obj.message or "getjwt" in mess_obj.message):
+                _LOGGER.debug('PROCESS gettoken response')
+                response = LLResponse(mess_obj.message)
+                self._token.token = response.value_as_dict["token"]
+                self._token.valid_until = response.value_as_dict["validUntil"]
+                self._token.hash_alg = self._current_key_and_salt.hash_alg
+                token_safe_result = self._token.save()
+                if token_safe_result:
+                    _LOGGER.debug("Token safed.")
+                command = f"{CMD_ENABLE_UPDATES}"
+                self.wsclient.send(self._encrypt(command))
 
+            elif isinstance(mess_obj, TextMessage) and "enablebinstatusupdate" in mess_obj.message:
+                _LOGGER.debug('PROCESS enablebinstatusupdate response')
+
+            elif isinstance(mess_obj, TextMessage) and "dev/sps/io/" in mess_obj.message:
+                _LOGGER.debug('PROCESS io response')
+            else:
+                _LOGGER.debug('PROCESS <UNKNOWN> response')
 
     async def get_json(self) -> bool:
         """Obtain basic info from the miniserver"""
