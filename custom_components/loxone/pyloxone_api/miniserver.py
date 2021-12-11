@@ -248,6 +248,21 @@ class MiniServer:
             _LOGGER.error("error hash_credentials...")
             return None
 
+    def _has_token(self, key):
+        if self._token.hash_alg == "SHA1":
+            digester = HMAC.new(
+                bytes.fromhex(key),
+                self._token.token.encode("utf-8"),
+                SHA1,
+            )
+        elif self._token.hash_alg == "SHA256":
+            digester = HMAC.new(
+                bytes.fromhex(key),
+                self._token.token.encode("utf-8"),
+                SHA256,
+            )
+        return digester.hexdigest()
+
     def async_message_handler(self, message, is_binary):
         if is_binary:
             if len(message) == 8 and message[0] == 3:
@@ -256,7 +271,7 @@ class MiniServer:
         else:
             if not message.startswith("{"):
                 # Do the encryption
-                pass
+                print("d")
 
             mess_obj = parse_message(message, self.message_header.message_type)
             if isinstance(mess_obj, TextMessage) and "keyexchange" in mess_obj.message:
@@ -268,10 +283,19 @@ class MiniServer:
 
                 if self._token.is_loaded and self._token.seconds_to_expire() > 300:
                     _LOGGER.debug("Token successfully loaded from file")
-                    # token_hash = await self._hash_token()
+                    command = f"{CMD_GET_KEY}"
+                    self.wsclient.send(self._encrypt(command))
                 else:
                     _LOGGER.debug("Token could not load or expired.")
                     command = f"{CMD_GET_KEY_AND_SALT}{self._username}"
+                    self.wsclient.send(self._encrypt(command))
+
+            elif isinstance(mess_obj, TextMessage) and "getkey" in mess_obj.message:
+                # Response of CMD_GET_KEY. Token still valid and loaded
+                key = mess_obj.value
+                if key != "":
+                    token_hash = self._has_token(key)
+                    command = f"{CMD_AUTH_WITH_TOKEN}{token_hash}/{self._username}"
                     self.wsclient.send(self._encrypt(command))
 
             elif isinstance(mess_obj, TextMessage) and "getkey2" in mess_obj.message:
@@ -293,7 +317,7 @@ class MiniServer:
                 self.wsclient.send(self._encrypt(command))
 
             elif isinstance(mess_obj, TextMessage) and ("gettoken" in mess_obj.message or "getjwt" in mess_obj.message):
-                _LOGGER.debug('PROCESS gettoken response')
+                _LOGGER.debug('Process gettoken response')
                 response = LLResponse(mess_obj.message)
                 self._token.token = response.value_as_dict["token"]
                 self._token.valid_until = response.value_as_dict["validUntil"]
@@ -304,13 +328,18 @@ class MiniServer:
                 command = f"{CMD_ENABLE_UPDATES}"
                 self.wsclient.send(self._encrypt(command))
 
+            elif isinstance(mess_obj, TextMessage) and "authwithtoken" in mess_obj.message:
+                _LOGGER.debug("Authentification with token successfully")
+                command = f"{CMD_ENABLE_UPDATES}"
+                self.wsclient.send(self._encrypt(command))
+
             elif isinstance(mess_obj, TextMessage) and "enablebinstatusupdate" in mess_obj.message:
-                _LOGGER.debug('PROCESS enablebinstatusupdate response')
+                _LOGGER.debug('Process enablebinstatusupdate response')
 
             elif isinstance(mess_obj, TextMessage) and "dev/sps/io/" in mess_obj.message:
-                _LOGGER.debug('PROCESS io response')
+                _LOGGER.debug('Process io response')
             else:
-                _LOGGER.debug('PROCESS <UNKNOWN> response')
+                _LOGGER.debug('Process <UNKNOWN> response')
 
     async def get_json(self) -> bool:
         """Obtain basic info from the miniserver"""
