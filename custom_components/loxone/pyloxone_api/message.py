@@ -225,7 +225,6 @@ class WeatherStatesTable(BaseMessage):
     def as_dict(self):
         return {}
 
-
 def parse_header(header: bytes) -> MessageHeader:
     return MessageHeader(header)
 

@@ -49,7 +49,7 @@ from .const import (
     TOKEN_PERMISSION,
 )
 
-from .message import LLResponse, TextMessage
+from .message import LLResponse, TextMessage, ValueStatesTable, TextStatesTable, WeatherStatesTable, Keepalive, DaytimerStatesTable
 from .exceptions import LoxoneException, LoxoneHTTPStatusError, LoxoneRequestError
 from .wsclient import WSClient
 
@@ -263,17 +263,58 @@ class MiniServer:
             )
         return digester.hexdigest()
 
+    def decrypt_message(self, message):
+        m = message
+        # _LOGGER.debug("  m type: {0}".format(type(m)))
+
+        cmd = b64decode(m)
+        # _LOGGER.debug("  cmd type: {0}".format(type(cmd)))
+        import binascii
+        key = binascii.unhexlify(self._key)
+        iv = binascii.unhexlify(self._iv)
+        cipher_aes = AES.new(key, AES.MODE_CBC, iv)
+
+        r = (cipher_aes.decrypt(cmd), AES.block_size)[0]
+        # _LOGGER.debug("  r: {0} |{1}|".format(type(r), r))
+
+        while r.endswith(b'\x00'):
+            r = r[:-1]
+
+        # _LOGGER.debug("  decrypted_message: |{0}|".format(r))
+        return str(r, 'utf8')
+
+    def _decrypt(self, command: str) -> bytes:
+        """AES decrypt a command returned by the miniserver."""
+        # control will be in the form:
+        # "jdev/sys/enc/CHG6k...A=="
+        # Encrypted strings returned by the miniserver are not %encoded (even
+        # if they were when sent to the miniserver )
+        remove_text = "jdev/sys/enc/"
+        enc_text = (
+            command[len(remove_text) :] if command.startswith(remove_text) else command
+        )
+        decoded = b64decode(enc_text)
+        aes_cipher = AES.new(self._key, AES.MODE_CBC, self._iv)
+        decrypted = aes_cipher.decrypt(decoded)
+        unpadded = Padding.unpad(decrypted, 16)
+        # The miniserver seems to terminate the text with a zero byte
+        return unpadded.rstrip(b"\x00")
+
+
     def async_message_handler(self, message, is_binary):
-        if is_binary:
+        if is_binary and len(message) == 8 and message[0] == 3:
             if len(message) == 8 and message[0] == 3:
                 self.message_header = MessageHeader(message)
 
         else:
-            if not message.startswith("{"):
-                # Do the encryption
-                print("d")
+            if is_binary:
+                mess_obj = parse_message(message, self.message_header.message_type)
+            else:
+                if message.startswith("{"):
+                    mess_obj = parse_message(message, self.message_header.message_type)
+                else:
+                    raise NotImplementedError("Decryption not implemented yet")
 
-            mess_obj = parse_message(message, self.message_header.message_type)
             if isinstance(mess_obj, TextMessage) and "keyexchange" in mess_obj.message:
                 # Wheather load token or get token with getkey2
                 self._token = LoxToken(
@@ -338,8 +379,32 @@ class MiniServer:
 
             elif isinstance(mess_obj, TextMessage) and "dev/sps/io/" in mess_obj.message:
                 _LOGGER.debug('Process io response')
+
+            elif isinstance(mess_obj, ValueStatesTable):
+                print("Got ValueStatesTable")
+                print(mess_obj.as_dict())
+
+            elif isinstance(mess_obj, TextStatesTable):
+                print("Got TextStatesTable")
+                print(mess_obj.as_dict())
+
+            elif isinstance(mess_obj, Keepalive):
+                print("Got Keepalive")
+                print(mess_obj.as_dict())
+
+            elif isinstance(mess_obj, WeatherStatesTable):
+                print("Got WeatherStatesTable")
+                print(mess_obj.as_dict())
+
+            elif isinstance(mess_obj, DaytimerStatesTable):
+                print("Got DaytimerStatesTable")
+                print(mess_obj.as_dict())
+
             else:
                 _LOGGER.debug('Process <UNKNOWN> response')
+
+                #_LOGGER.debug("header: {0}-{1}-{2}".format(self.message_header.payload[0], self.message_header.payload[1], self.message_header.payload[2]))
+                #_LOGGER.debug("response: " + self.decrypt_message(message))
 
     async def get_json(self) -> bool:
         """Obtain basic info from the miniserver"""
