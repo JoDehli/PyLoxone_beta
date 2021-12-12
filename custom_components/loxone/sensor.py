@@ -156,7 +156,7 @@ class LoxoneCustomSensor(LoxoneEntity, SensorEntity):
         return self._unit_of_measurement
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes.
 
         Implemented by platform classes.
@@ -233,7 +233,7 @@ class LoxoneTextSensor(LoxoneEntity, SensorEntity):
         self.async_schedule_update_ha_state()
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes.
 
         Implemented by platform classes.
@@ -319,7 +319,7 @@ class Loxonesensor(LoxoneEntity, SensorEntity):
             return "mdi:chart-bell-curve"
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes.
 
         Implemented by platform classes.
@@ -340,7 +340,7 @@ class Loxonesensor(LoxoneEntity, SensorEntity):
                 "manufacturer": "Loxone",
                 "model": "Sensor analog",
                 "type": self.typ,
-                "suggested_area": self.room,
+                "suggested_area": self.room
             }
         else:
             return {
@@ -349,5 +349,5 @@ class Loxonesensor(LoxoneEntity, SensorEntity):
                 "manufacturer": "Loxone",
                 "model": "Sensor digital",
                 "type": self.typ,
-                "suggested_area": self.room,
+                "suggested_area": self.room
             }

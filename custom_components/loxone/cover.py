@@ -185,7 +185,7 @@ class LoxoneGate(LoxoneEntity, CoverEntity):
             self.schedule_update_ha_state()
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes.
 
         Implemented by platform classes.
@@ -205,7 +205,7 @@ class LoxoneGate(LoxoneEntity, CoverEntity):
             "manufacturer": "Loxone",
             "model": "Gate",
             "type": self.type,
-            "suggested_area": self.room,
+            "suggested_area": self.room
         }
 
 
@@ -243,7 +243,7 @@ class LoxoneWindow(LoxoneEntity, CoverEntity):
         return self._position
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """
         Return device specific state attributes.
         Implemented by platform classes.
@@ -318,7 +318,7 @@ class LoxoneWindow(LoxoneEntity, CoverEntity):
             "name": self.name,
             "manufacturer": "Loxone",
             "model": "Window",
-            "suggested_area": self.room,
+             "suggested_area": self.room
         }
 
 
@@ -489,7 +489,7 @@ class LoxoneJalousie(LoxoneEntity, CoverEntity):
             return " "
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """
         Return device specific state attributes.
         Implemented by platform classes.
@@ -625,5 +625,5 @@ class LoxoneJalousie(LoxoneEntity, CoverEntity):
             "manufacturer": "Loxone",
             "model": "Jalousie",
             "type": self.type,
-            "suggested_area": self.room,
+            "suggested_area": self.room
         }

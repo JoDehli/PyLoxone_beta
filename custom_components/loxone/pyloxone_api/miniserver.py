@@ -331,14 +331,6 @@ class MiniServer:
                     command = f"{CMD_GET_KEY_AND_SALT}{self._username}"
                     self.wsclient.send(self._encrypt(command))
 
-            elif isinstance(mess_obj, TextMessage) and "getkey" in mess_obj.message:
-                # Response of CMD_GET_KEY. Token still valid and loaded
-                key = mess_obj.value
-                if key != "":
-                    token_hash = self._has_token(key)
-                    command = f"{CMD_AUTH_WITH_TOKEN}{token_hash}/{self._username}"
-                    self.wsclient.send(self._encrypt(command))
-
             elif isinstance(mess_obj, TextMessage) and "getkey2" in mess_obj.message:
                 # Response of CMD_GET_KEY_AND_SALT. Request a new Token
                 self._current_key_and_salt = LxJsonKeySalt(
@@ -356,6 +348,14 @@ class MiniServer:
                     # 'jdev/sys/getjwt/6b30234557c62ee7b0509698ce4857dabcd703fc/dev/2/edfc5f9a-df3f-4cad-9dddcdc42c732be2/pyloxone_api'
                     command = f"{CMD_REQUEST_TOKEN_JSON_WEB}{new_hash}/{self._username}/{TOKEN_PERMISSION}/edfc5f9a-df3f-4cad-9dddcdc42c732be2/pyloxone_api"
                 self.wsclient.send(self._encrypt(command))
+
+            elif isinstance(mess_obj, TextMessage) and "getkey" in mess_obj.message:
+                # Response of CMD_GET_KEY. Token still valid and loaded
+                key = mess_obj.value
+                if key != "":
+                    token_hash = self._has_token(key)
+                    command = f"{CMD_AUTH_WITH_TOKEN}{token_hash}/{self._username}"
+                    self.wsclient.send(self._encrypt(command))
 
             elif isinstance(mess_obj, TextMessage) and ("gettoken" in mess_obj.message or "getjwt" in mess_obj.message):
                 _LOGGER.debug('Process gettoken response')

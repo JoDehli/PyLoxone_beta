@@ -161,7 +161,7 @@ class LoxoneTimedSwitch(LoxoneEntity, SwitchEntity):
             self.async_schedule_update_ha_state()
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes.
 
         Implemented by platform classes.
@@ -193,7 +193,7 @@ class LoxoneTimedSwitch(LoxoneEntity, SwitchEntity):
             "name": self.name,
             "manufacturer": "Loxone",
             "model": self.type,
-            "suggested_area": self.room,
+            "suggested_area": self.room
         }
 
 
@@ -262,7 +262,7 @@ class LoxoneSwitch(LoxoneEntity, SwitchEntity):
             self.async_schedule_update_ha_state()
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes.
 
         Implemented by platform classes.
@@ -283,7 +283,7 @@ class LoxoneSwitch(LoxoneEntity, SwitchEntity):
             "name": self.name,
             "manufacturer": "Loxone",
             "model": self.type,
-            "suggested_area": self.room,
+            "suggested_area": self.room
         }
 
 
@@ -298,7 +298,7 @@ class LoxoneIntercomSubControl(LoxoneSwitch):
         self.schedule_update_ha_state()
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes.
 
         Implemented by platform classes.
@@ -319,5 +319,5 @@ class LoxoneIntercomSubControl(LoxoneSwitch):
             "name": self.name,
             "manufacturer": "Loxone",
             "model": self.type,
-            "suggested_area": self.room,
+            "suggested_area": self.room
         }

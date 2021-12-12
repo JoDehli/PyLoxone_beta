@@ -237,7 +237,7 @@ class LoxoneAlarm(LoxoneEntity, AlarmControlPanelEntity):
         return STATE_ALARM_DISARMED
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return the state attributes."""
         return {
             "uuid": self.uuidAction,
@@ -274,5 +274,5 @@ class LoxoneAlarm(LoxoneEntity, AlarmControlPanelEntity):
             "manufacturer": "Loxone",
             "model": "Alarm",
             "type": self.type,
-            "suggested_area": self.room,
+            "suggested_area": self.room
         }

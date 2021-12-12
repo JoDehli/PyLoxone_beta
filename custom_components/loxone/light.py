@@ -321,7 +321,7 @@ class LoxonelightcontrollerV2(LoxoneEntity, LightEntity):
             "name": self.name,
             "manufacturer": "Loxone",
             "model": "LightControllerV2",
-            "suggested_area": self.room,
+            "suggested_area": self.room
         }
 
     @property
@@ -604,7 +604,7 @@ class LoxonelightcontrollerV2(LoxoneEntity, LightEntity):
             return False
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes.
 
         Implemented by platform classes.
@@ -790,7 +790,7 @@ class LoxoneColorPickerV2(LoxoneEntity, LightEntity):
         self.schedule_update_ha_state()
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes.
 
         Implemented by platform classes.
@@ -810,15 +810,19 @@ class LoxoneColorPickerV2(LoxoneEntity, LightEntity):
             if color.startswith("hsv"):
                 color = color.replace("hsv", "")
                 color = eval(color)
+                self._color_temp = 0
                 self._rgb_color = color_util.color_hs_to_RGB(color[0], color[1])
                 self._position = color[2]
+                self._attr_color_mode = COLOR_MODE_HS
                 request_update = True
 
             elif color.startswith("temp"):
                 color = color.replace("temp", "")
                 color = eval(color)
+                self._rgb_color = color_util.color_hs_to_RGB(0, 0)
                 self._color_temp = to_hass_color_temp(color[1])
                 self._position = color[0]
+                self._attr_color_mode = COLOR_MODE_COLOR_TEMP 
                 request_update = True
 
         if request_update:
@@ -906,7 +910,7 @@ class LoxoneDimmer(LoxoneEntity, LightEntity):
                 "name": self.name,
                 "manufacturer": "Loxone",
                 "model": "LightControllerV2",
-                "suggested_area": self.room,
+                "suggested_area": self.room
             }
         else:
             return {
@@ -914,7 +918,7 @@ class LoxoneDimmer(LoxoneEntity, LightEntity):
                 "name": self.name,
                 "manufacturer": "Loxone",
                 "model": "Dimmer",
-                "suggested_area": self.room,
+                "suggested_area": self.room
             }
 
     @property
@@ -992,7 +996,7 @@ class LoxoneDimmer(LoxoneEntity, LightEntity):
         return self._position > 0
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes.
 
         Implemented by platform classes.
