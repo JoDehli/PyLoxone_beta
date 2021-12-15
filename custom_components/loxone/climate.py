@@ -134,7 +134,7 @@ class LoxoneRoomControllerV2(LoxoneEntity, ClimateEntity, ABC):
             "device_typ": self.type,
             "room": self.room,
             "category": self.cat,
-            "plattform": "loxone",
+            "platform": "loxone",
         }
 
     @property

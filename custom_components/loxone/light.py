@@ -615,7 +615,7 @@ class LoxonelightcontrollerV2(LoxoneEntity, LightEntity):
             "category": self.cat,
             "selected_scene": self.effect,
             "device_typ": self.type,
-            "plattform": "loxone",
+            "platform": "loxone",
         }
 
     @property
@@ -685,7 +685,7 @@ class LoxoneLight(LoxoneEntity, LightEntity, ToggleEntity):
             "room": self.room,
             "category": self.cat,
             "device_typ": self.type,
-            "plattform": "loxone",
+            "platform": "loxone",
         }
 
     @property
@@ -800,7 +800,7 @@ class LoxoneColorPickerV2(LoxoneEntity, LightEntity):
             "room": self.room,
             "category": self.cat,
             "device_typ": self.type,
-            "plattform": "loxone",
+            "platform": "loxone",
         }
 
     async def event_handler(self, e):
@@ -1006,7 +1006,7 @@ class LoxoneDimmer(LoxoneEntity, LightEntity):
             "room": self.room,
             "category": self.cat,
             "device_typ": self.type,
-            "plattform": "loxone",
+            "platform": "loxone",
             "max": self._max,
             "min": self._min,
         }

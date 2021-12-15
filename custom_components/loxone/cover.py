@@ -194,7 +194,7 @@ class LoxoneGate(LoxoneEntity, CoverEntity):
             "uuid": self.uuidAction,
             "device_typ": self.type,
             "category": self.cat,
-            "plattform": "loxone",
+            "platform": "loxone",
         }
 
     @property
@@ -251,7 +251,7 @@ class LoxoneWindow(LoxoneEntity, CoverEntity):
         device_att = {
             "uuid": self.uuidAction,
             "device_typ": self.type,
-            "plattform": "loxone",
+            "platform": "loxone",
             "room": self.room,
             "category": self.cat,
         }
@@ -497,7 +497,7 @@ class LoxoneJalousie(LoxoneEntity, CoverEntity):
         device_att = {
             "uuid": self.uuidAction,
             "device_typ": self.type,
-            "plattform": "loxone",
+            "platform": "loxone",
             "room": self.room,
             "category": self.cat,
             "current_position": self.current_cover_position,
