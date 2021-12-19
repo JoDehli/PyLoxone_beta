@@ -66,8 +66,8 @@ class WSClient:
         _LOGGER.debug("start")
         if self.state != STATE_RUNNING:
             self.state = STATE_STARTING
-            self.loop.create_task(self.running())
-
+            return self.loop.create_task(self.running())
+        return None
 
     async def running(self):
         """Start websocket connection."""

@@ -52,7 +52,7 @@ from .const import (
 
 from .message import LLResponse, TextMessage, ValueStatesTable, TextStatesTable, WeatherStatesTable, Keepalive, DaytimerStatesTable
 from .exceptions import LoxoneException, LoxoneHTTPStatusError, LoxoneRequestError
-from .wsclient import WSClient
+from .wsclient import WSClient, STATE_STOPPED, STATE_STARTING, STATE_RUNNING
 
 import logging
 import traceback
@@ -196,14 +196,22 @@ class MiniServer:
             self.async_session_handler,
             self.async_message_handler,
         )
-        self.wsclient.start()
+        running_task = self.wsclient.start()
+        if running_task:
+            self.running_task.append(running_task)
+
 
         _LOGGER.debug("Finished connect")
+
+    async def check_token_still_valid(self):
+        while True:
+            await asyncio.sleep(20)   # increase; only for testing
+            print(len(self.running_task))
 
     def async_session_handler(self, state):
         _LOGGER.debug("async_session_handler")
         _LOGGER.debug("state: {0}".format(state))
-        if state == "running":
+        if state == STATE_RUNNING:
             command = f"{CMD_KEY_EXCHANGE}{self._session_key.decode()}"
             self.wsclient.send(command)
 
@@ -358,6 +366,8 @@ class MiniServer:
                 self.wsclient.send(self._encrypt(command))
                 keep_alive_task = self.loop.create_task(self.keep_alive())
                 self.running_task.append(keep_alive_task)
+                check_still_valid = self.loop.create_task(self.check_token_still_valid())
+                self.running_task.append(check_still_valid)
 
             elif isinstance(mess_obj, TextMessage) and "enablebinstatusupdate" in mess_obj.message:
                 _LOGGER.debug('Process enablebinstatusupdate response')
@@ -504,7 +514,8 @@ class MiniServer:
     async def keep_alive(self):
         while self.loop.is_running():
             await asyncio.sleep(KEEP_ALIVE_PERIOD)
-            self.wsclient.send(CMD_KEEP_ALIVE)
+            if self.wsclient.state == STATE_RUNNING:
+                self.wsclient.send(CMD_KEEP_ALIVE)
 
 '''
 
