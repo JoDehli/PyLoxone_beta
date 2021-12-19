@@ -541,7 +541,7 @@ class LoxAPI2:
         try:
             session_key = rsa_cipher.encrypt(session_key)
             session_key = b64encode(session_key)
-            _LOGGER.debug("generate_session_key successfully...")
+            _LOGGER.debug("generate_session_keyA successfully...")
         except ValueError as exc:
             _LOGGER.error(f"Error generating session key: {exc}")
             raise LoxoneException(exc) from None

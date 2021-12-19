@@ -47,6 +47,7 @@ from .const import (
     THROTTLE_CHECK_TOKEN_STILL_VALID,
     TIMEOUT,
     TOKEN_PERMISSION,
+    CMD_KEEP_ALIVE
 )
 
 from .message import LLResponse, TextMessage, ValueStatesTable, TextStatesTable, WeatherStatesTable, Keepalive, DaytimerStatesTable
@@ -161,6 +162,7 @@ class MiniServer:
         self._session_key = None
         self._saltmine = _SaltMine()
         self._current_key_and_salt = None
+        self._token = None
 
         self.message_body = None
         self.message_header = None
@@ -168,23 +170,25 @@ class MiniServer:
         self.json = None
         self.snr: str = ""
 
+        self.ready = asyncio.Event()
+
         self.version: str = ""  # a string, eg "12.0.1.2"
         self._version: list[int] = []  # a list of ints eg [12,0,1,2]
         self._https_status: int | None = (
             None  # None = no TLS, 1 = TLS available, 2 = cert expired
         )
-
-        # self.api: LoxAPI | None = None
+        self.loop = None
+        self.wsclient = None
+        self.async_connection_status_callback = None
+        self.running_task = []
 
     def connect(self, loop, connection_status):
         """Connect to the miniserver."""
-
         self.loop = loop
         self.async_connection_status_callback = connection_status
 
         self.wsclient = WSClient(
-            self.loop,
-            self._host,
+            self.loop, self._host,
             self._port,
             self._username,
             self._password,
@@ -263,26 +267,6 @@ class MiniServer:
             )
         return digester.hexdigest()
 
-    def decrypt_message(self, message):
-        m = message
-        # _LOGGER.debug("  m type: {0}".format(type(m)))
-
-        cmd = b64decode(m)
-        # _LOGGER.debug("  cmd type: {0}".format(type(cmd)))
-        import binascii
-        key = binascii.unhexlify(self._key)
-        iv = binascii.unhexlify(self._iv)
-        cipher_aes = AES.new(key, AES.MODE_CBC, iv)
-
-        r = (cipher_aes.decrypt(cmd), AES.block_size)[0]
-        # _LOGGER.debug("  r: {0} |{1}|".format(type(r), r))
-
-        while r.endswith(b'\x00'):
-            r = r[:-1]
-
-        # _LOGGER.debug("  decrypted_message: |{0}|".format(r))
-        return str(r, 'utf8')
-
     def _decrypt(self, command: str) -> bytes:
         """AES decrypt a command returned by the miniserver."""
         # control will be in the form:
@@ -299,7 +283,6 @@ class MiniServer:
         unpadded = Padding.unpad(decrypted, 16)
         # The miniserver seems to terminate the text with a zero byte
         return unpadded.rstrip(b"\x00")
-
 
     def async_message_handler(self, message, is_binary):
         if is_binary and len(message) == 8 and message[0] == 3:
@@ -373,6 +356,8 @@ class MiniServer:
                 _LOGGER.debug("Authentification with token successfully")
                 command = f"{CMD_ENABLE_UPDATES}"
                 self.wsclient.send(self._encrypt(command))
+                keep_alive_task = self.loop.create_task(self.keep_alive())
+                self.running_task.append(keep_alive_task)
 
             elif isinstance(mess_obj, TextMessage) and "enablebinstatusupdate" in mess_obj.message:
                 _LOGGER.debug('Process enablebinstatusupdate response')
@@ -516,6 +501,10 @@ class MiniServer:
             raise LoxoneException(exc) from None
         return True
 
+    async def keep_alive(self):
+        while self.loop.is_running():
+            await asyncio.sleep(KEEP_ALIVE_PERIOD)
+            self.wsclient.send(CMD_KEEP_ALIVE)
 
 '''
 

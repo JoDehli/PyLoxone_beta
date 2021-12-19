@@ -91,8 +91,6 @@ class WSClient:
                     )
                     self.async_message_handler_callback(msg.data, True)
                 elif msg.type == aiohttp.WSMsgType.TEXT:
-                    # self._data = json.loads(msg.data)
-                    # self.async_session_handler_callback('data')
                     _LOGGER.debug("Websocket TEXT data: {0}".format(msg.data))
                     self.async_message_handler_callback(msg.data, False)
                 elif msg.type == aiohttp.WSMsgType.CLOSED:

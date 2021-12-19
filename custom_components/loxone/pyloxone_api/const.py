@@ -30,6 +30,7 @@ MAX_REFRESH_DELAY: Final =  60 * 60 * 24 # 1 day
 
 LOXAPPPATH: Final = "/data/LoxAPP3.json"
 
+CMD_KEEP_ALIVE: Final = "keepalive"
 CMD_GET_PUBLIC_KEY: Final = "jdev/sys/getPublicKey"
 CMD_KEY_EXCHANGE: Final = "jdev/sys/keyexchange/"
 CMD_GET_KEY_AND_SALT: Final = "jdev/sys/getkey2/"
