@@ -21,4 +21,4 @@ __pycache__
 custom_components/loxone/homeassistant
 lox_token.cfg
 config
-
+*ws*
