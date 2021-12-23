@@ -89,10 +89,10 @@ class WSClient:
                     _LOGGER.debug(
                         "Websocket BINARY data: {0}".format(binascii.hexlify(msg.data))
                     )
-                    self.async_message_handler_callback(msg.data, True)
+                    await self.async_message_handler_callback(msg.data, True)
                 elif msg.type == aiohttp.WSMsgType.TEXT:
                     _LOGGER.debug("Websocket TEXT data: {0}".format(msg.data))
-                    self.async_message_handler_callback(msg.data, False)
+                    await self.async_message_handler_callback(msg.data, False)
                 elif msg.type == aiohttp.WSMsgType.CLOSED:
                     _LOGGER.debug("CLOSED")
                     break
@@ -132,7 +132,10 @@ class WSClient:
             except Exception as err:
                 _LOGGER.error("send Error {0}".format(err))
 
-    def stop(self):
+    async def stop(self):
         """Close websocket connection."""
         _LOGGER.debug("stop")
         self.state = STATE_STOPPED
+        if not self.ws.closed:
+            await self.ws.close()
+            await self.session.close()

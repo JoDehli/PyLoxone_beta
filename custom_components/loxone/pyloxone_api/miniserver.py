@@ -10,7 +10,7 @@ import time
 import urllib.parse
 from base64 import b64decode, b64encode
 from collections import namedtuple
-from typing import Any, Callable, NoReturn
+from typing import Any, Callable, NoReturn, Optional
 
 import httpx
 import websockets as wslib
@@ -166,6 +166,7 @@ class MiniServer:
 
         self.message_body = None
         self.message_header = None
+        self.message_call_back = None
 
         self.json = None
         self.snr: str = ""
@@ -180,7 +181,19 @@ class MiniServer:
         self.loop = None
         self.wsclient = None
         self.async_connection_status_callback = None
-        self.running_task = []
+        self._pending = []
+
+    @property
+    def loxone_config(self):
+        return self.json
+
+    def async_set_callback(self, message_callback):
+        self.message_call_back = message_callback
+
+    async def stop(self):
+        await self.wsclient.stop()
+        for task in self._pending:
+            task.cancel()
 
     def connect(self, loop, connection_status):
         """Connect to the miniserver."""
@@ -198,15 +211,13 @@ class MiniServer:
         )
         running_task = self.wsclient.start()
         if running_task:
-            self.running_task.append(running_task)
-
-
+            self._pending.append(running_task)
         _LOGGER.debug("Finished connect")
 
     async def check_token_still_valid(self):
         while True:
-            await asyncio.sleep(20)   # increase; only for testing
-            print(len(self.running_task))
+            await asyncio.sleep(5)   # increase; only for testing
+            print(len(self._pending))
 
     def async_session_handler(self, state):
         _LOGGER.debug("async_session_handler")
@@ -292,7 +303,7 @@ class MiniServer:
         # The miniserver seems to terminate the text with a zero byte
         return unpadded.rstrip(b"\x00")
 
-    def async_message_handler(self, message, is_binary):
+    async def async_message_handler(self, message, is_binary):
         if is_binary and len(message) == 8 and message[0] == 3:
             if len(message) == 8 and message[0] == 3:
                 self.message_header = MessageHeader(message)
@@ -365,39 +376,37 @@ class MiniServer:
                 command = f"{CMD_ENABLE_UPDATES}"
                 self.wsclient.send(self._encrypt(command))
                 keep_alive_task = self.loop.create_task(self.keep_alive())
-                self.running_task.append(keep_alive_task)
+                self._pending.append(keep_alive_task)
                 check_still_valid = self.loop.create_task(self.check_token_still_valid())
-                self.running_task.append(check_still_valid)
+                self._pending.append(check_still_valid)
 
             elif isinstance(mess_obj, TextMessage) and "enablebinstatusupdate" in mess_obj.message:
                 _LOGGER.debug('Process enablebinstatusupdate response')
 
             elif isinstance(mess_obj, TextMessage) and "dev/sps/io/" in mess_obj.message:
                 _LOGGER.debug('Process io response')
+                if self.message_call_back:
+                    await self.message_call_back(mess_obj.message)
 
             elif isinstance(mess_obj, ValueStatesTable):
-                print("Got ValueStatesTable")
-                print(mess_obj.as_dict())
+                if self.message_call_back:
+                    await self.message_call_back(mess_obj.as_dict())
 
             elif isinstance(mess_obj, TextStatesTable):
-                print("Got TextStatesTable")
-                print(mess_obj.as_dict())
+                if self.message_call_back:
+                    await self.message_call_back(mess_obj.as_dict())
 
             elif isinstance(mess_obj, Keepalive):
-                print("Got Keepalive")
-                print(mess_obj.as_dict())
+                _LOGGER.debug('Got Keepalive')
 
             elif isinstance(mess_obj, WeatherStatesTable):
-                print("Got WeatherStatesTable")
-                print(mess_obj.as_dict())
+                _LOGGER.debug('Got WeatherStatesTable')
 
             elif isinstance(mess_obj, DaytimerStatesTable):
-                print("Got DaytimerStatesTable")
-                print(mess_obj.as_dict())
+                _LOGGER.debug('Got DaytimerStatesTable')
 
             else:
                 _LOGGER.debug('Process <UNKNOWN> response')
-
                 #_LOGGER.debug("header: {0}-{1}-{2}".format(self.message_header.payload[0], self.message_header.payload[1], self.message_header.payload[2]))
                 #_LOGGER.debug("response: " + self.decrypt_message(message))
 

@@ -15,7 +15,7 @@ from .helpers import (get_all_dimmer, get_all_light_controller,
                       get_cat_name_from_cat_uuid, get_room_name_from_room_uuid,
                       hass_to_lox, lox2hass_mapped, lox_to_hass,
                       to_hass_color_temp, to_loxone_color_temp)
-from .miniserver import get_miniserver_from_config_entry
+from . import get_miniserver_from_config_entry
 
 _LOGGER = logging.getLogger(__name__)
 DEFAULT_NAME = "Loxone Light Controller V2"
@@ -33,7 +33,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     generate_subcontrols = config_entry.options.get(
         "generate_lightcontroller_subcontrols", False
     )
-    loxconfig = miniserver.api.json
+    loxconfig = miniserver.loxone_config
     entites = []
     all_light_controller_dimmers = []
     all_color_picker = []

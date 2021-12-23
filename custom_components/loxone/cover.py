@@ -28,7 +28,7 @@ from .const import (DOMAIN, SENDDOMAIN, SUPPORT_CLOSE_TILT, SUPPORT_OPEN_TILT,
                     SUPPORT_STOP, SUPPORT_STOP_TILT)
 from .helpers import (get_all_covers, get_cat_name_from_cat_uuid,
                       get_room_name_from_room_uuid)
-from .miniserver import get_miniserver_from_config_entry
+from . import get_miniserver_from_config_entry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ async def async_setup_platform(hass, config, async_add_devices, discovery_info={
 async def async_setup_entry(hass, config_entry, async_add_entites):
     """Set Loxone covers."""
     miniserver = get_miniserver_from_config_entry(hass, config_entry)
-    loxconfig = miniserver.api.json
+    loxconfig = miniserver.loxone_config
     covers = []
 
     for cover in get_all_covers(loxconfig):
@@ -69,11 +69,11 @@ async def async_setup_entry(hass, config_entry, async_add_entites):
     def async_add_covers(_):
         async_add_entites(_)
 
-    miniserver.listeners.append(
-        async_dispatcher_connect(
-            hass, miniserver.async_signal_new_device(NEW_COVERS), async_add_entites
-        )
-    )
+    # miniserver.listeners.append(
+    #     async_dispatcher_connect(
+    #         hass, miniserver.async_signal_new_device(NEW_COVERS), async_add_entites
+    #     )
+    # )
     async_add_entites(covers)
 
 

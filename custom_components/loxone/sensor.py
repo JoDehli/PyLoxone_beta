@@ -19,7 +19,7 @@ from . import LoxoneEntity
 from .const import CONF_ACTIONID, DOMAIN, SENDDOMAIN
 from .helpers import (get_all, get_all_analog_info, get_all_digital_info,
                       get_cat_name_from_cat_uuid, get_room_name_from_room_uuid)
-from .miniserver import get_miniserver_from_config_entry
+from . import get_miniserver_from_config_entry
 
 NEW_SENSOR = "sensors"
 
@@ -57,7 +57,7 @@ async def async_setup_platform(
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up entry."""
     miniserver = get_miniserver_from_config_entry(hass, config_entry)
-    loxconfig = miniserver.api.json
+    loxconfig = miniserver.loxone_config
     sensors = []
     if "softwareVersion" in loxconfig:
         sensors.append(LoxoneVersionSensor(loxconfig["softwareVersion"]))
@@ -97,11 +97,11 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     def async_add_sensors(_):
         async_add_entities(_, True)
 
-    miniserver.listeners.append(
-        async_dispatcher_connect(
-            hass, miniserver.async_signal_new_device(NEW_SENSOR), async_add_sensors
-        )
-    )
+    # miniserver.listeners.append(
+    #     async_dispatcher_connect(
+    #         hass, miniserver.async_signal_new_device(NEW_SENSOR), async_add_sensors
+    #     )
+    # )
 
     async_add_entities(sensors)
 

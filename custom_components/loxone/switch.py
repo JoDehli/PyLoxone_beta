@@ -13,7 +13,8 @@ from . import LoxoneEntity
 from .const import DOMAIN, SENDDOMAIN
 from .helpers import (get_all_switch_entities, get_cat_name_from_cat_uuid,
                       get_room_name_from_room_uuid)
-from .miniserver import get_miniserver_from_config_entry
+from . import get_miniserver_from_config_entry
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up entry."""
     miniserver = get_miniserver_from_config_entry(hass, config_entry)
-    loxconfig = miniserver.api.json
+    loxconfig = miniserver.loxone_config
     entites = []
 
     for switch_entity in get_all_switch_entities(loxconfig):
