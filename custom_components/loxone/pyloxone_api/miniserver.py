@@ -7,6 +7,7 @@ import logging
 import queue
 import ssl
 import time
+import traceback
 import urllib.parse
 from base64 import b64decode, b64encode
 from collections import namedtuple
@@ -19,43 +20,25 @@ from Crypto.Hash import HMAC, SHA1, SHA256
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 from Crypto.Util import Padding
-from .message import MessageHeader, parse_message
+
+from .const import (AES_KEY_SIZE, CMD_AUTH_WITH_TOKEN, CMD_CHECK_TOKEN,
+                    CMD_ENABLE_UPDATES, CMD_ENCRYPT_CMD, CMD_GET_KEY,
+                    CMD_GET_KEY_AND_SALT, CMD_GET_PUBLIC_KEY,
+                    CMD_GET_VISUAL_PASSWD, CMD_KEEP_ALIVE, CMD_KEY_EXCHANGE,
+                    CMD_REFRESH_TOKEN, CMD_REFRESH_TOKEN_JSON_WEB,
+                    CMD_REQUEST_TOKEN, CMD_REQUEST_TOKEN_JSON_WEB,
+                    DEFAULT_TOKEN_PERSIST_NAME, IV_BYTES, KEEP_ALIVE_PERIOD,
+                    LOXAPPPATH, MAX_REFRESH_DELAY, SALT_BYTES,
+                    SALT_MAX_AGE_SECONDS, SALT_MAX_USE_COUNT,
+                    THROTTLE_CHECK_TOKEN_STILL_VALID, TIMEOUT,
+                    TOKEN_PERMISSION)
+from .exceptions import (LoxoneException, LoxoneHTTPStatusError,
+                         LoxoneRequestError)
 from .loxtoken import LoxToken
-
-from .const import (
-    AES_KEY_SIZE,
-    CMD_AUTH_WITH_TOKEN,
-    CMD_ENABLE_UPDATES,
-    CMD_ENCRYPT_CMD,
-    CMD_GET_KEY,
-    CMD_GET_KEY_AND_SALT,
-    CMD_GET_PUBLIC_KEY,
-    CMD_GET_VISUAL_PASSWD,
-    CMD_KEY_EXCHANGE,
-    CMD_REFRESH_TOKEN,
-    CMD_REFRESH_TOKEN_JSON_WEB,
-    CMD_REQUEST_TOKEN,
-    CMD_REQUEST_TOKEN_JSON_WEB,
-    DEFAULT_TOKEN_PERSIST_NAME,
-    IV_BYTES,
-    KEEP_ALIVE_PERIOD,
-    LOXAPPPATH,
-    MAX_REFRESH_DELAY,
-    SALT_BYTES,
-    SALT_MAX_AGE_SECONDS,
-    SALT_MAX_USE_COUNT,
-    THROTTLE_CHECK_TOKEN_STILL_VALID,
-    TIMEOUT,
-    TOKEN_PERMISSION,
-    CMD_KEEP_ALIVE
-)
-
-from .message import LLResponse, TextMessage, ValueStatesTable, TextStatesTable, WeatherStatesTable, Keepalive, DaytimerStatesTable
-from .exceptions import LoxoneException, LoxoneHTTPStatusError, LoxoneRequestError
-from .wsclient import WSClient, STATE_STOPPED, STATE_STARTING, STATE_RUNNING
-
-import logging
-import traceback
+from .message import (DaytimerStatesTable, Keepalive, LLResponse,
+                      MessageHeader, TextMessage, TextStatesTable,
+                      ValueStatesTable, WeatherStatesTable, parse_message)
+from .wsclient import STATE_RUNNING, STATE_STARTING, STATE_STOPPED, WSClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -163,6 +146,7 @@ class MiniServer:
         self._saltmine = _SaltMine()
         self._current_key_and_salt = None
         self._token = None
+        self._token_hash = None
 
         self.message_body = None
         self.message_header = None
@@ -182,6 +166,7 @@ class MiniServer:
         self.wsclient = None
         self.async_connection_status_callback = None
         self._pending = []
+        self._get_key_queue = queue.Queue(maxsize=20)
 
     @property
     def loxone_config(self):
@@ -201,7 +186,8 @@ class MiniServer:
         self.async_connection_status_callback = connection_status
 
         self.wsclient = WSClient(
-            self.loop, self._host,
+            self.loop,
+            self._host,
             self._port,
             self._username,
             self._password,
@@ -213,11 +199,6 @@ class MiniServer:
         if running_task:
             self._pending.append(running_task)
         _LOGGER.debug("Finished connect")
-
-    async def check_token_still_valid(self):
-        while True:
-            await asyncio.sleep(5)   # increase; only for testing
-            print(len(self._pending))
 
     def async_session_handler(self, state):
         _LOGGER.debug("async_session_handler")
@@ -271,7 +252,7 @@ class MiniServer:
             _LOGGER.error("error hash_credentials...")
             return None
 
-    def _has_token(self, key):
+    def _hash_token(self, key):
         if self._token.hash_alg == "SHA1":
             digester = HMAC.new(
                 bytes.fromhex(key),
@@ -307,7 +288,6 @@ class MiniServer:
         if is_binary and len(message) == 8 and message[0] == 3:
             if len(message) == 8 and message[0] == 3:
                 self.message_header = MessageHeader(message)
-
         else:
             if is_binary:
                 mess_obj = parse_message(message, self.message_header.message_type)
@@ -316,6 +296,9 @@ class MiniServer:
                     mess_obj = parse_message(message, self.message_header.message_type)
                 else:
                     raise NotImplementedError("Decryption not implemented yet")
+
+            if hasattr(mess_obj, "control") and mess_obj.control.find("/enc/") > -1:
+                mess_obj.control = self._decrypt(mess_obj.control)
 
             if isinstance(mess_obj, TextMessage) and "keyexchange" in mess_obj.message:
                 # Wheather load token or get token with getkey2
@@ -355,36 +338,90 @@ class MiniServer:
                 # Response of CMD_GET_KEY. Token still valid and loaded
                 key = mess_obj.value
                 if key != "":
-                    token_hash = self._has_token(key)
-                    command = f"{CMD_AUTH_WITH_TOKEN}{token_hash}/{self._username}"
-                    self.wsclient.send(self._encrypt(command))
+                    token_hash = self._hash_token(key)
+                    if self._token_hash is None:
+                        self._token_hash = token_hash
+                        command = (
+                            f"{CMD_AUTH_WITH_TOKEN}{self._token_hash}/{self._username}"
+                        )
+                        self.wsclient.send(self._encrypt(command))
+                    else:
+                        self._token_hash = token_hash
+                        try:
+                            if not self._get_key_queue.empty():
+                                await self._get_key_queue.get()
+                                if not self._get_key_queue.empty():
+                                    self.wsclient.send(f"{CMD_GET_KEY}")
+                        except:
+                            traceback.print_exc()
 
-            elif isinstance(mess_obj, TextMessage) and ("gettoken" in mess_obj.message or "getjwt" in mess_obj.message):
-                _LOGGER.debug('Process gettoken response')
+            elif isinstance(mess_obj, TextMessage) and (
+                "gettoken" in mess_obj.message or "getjwt" in mess_obj.message
+            ):
+                _LOGGER.debug("Process gettoken response")
                 response = LLResponse(mess_obj.message)
                 self._token.token = response.value_as_dict["token"]
                 self._token.valid_until = response.value_as_dict["validUntil"]
                 self._token.hash_alg = self._current_key_and_salt.hash_alg
                 token_safe_result = self._token.save()
                 if token_safe_result:
-                    _LOGGER.debug("Token safed.")
+                    _LOGGER.debug("Token saved.")
                 command = f"{CMD_ENABLE_UPDATES}"
                 self.wsclient.send(self._encrypt(command))
 
-            elif isinstance(mess_obj, TextMessage) and "authwithtoken" in mess_obj.message:
-                _LOGGER.debug("Authentification with token successfully")
-                command = f"{CMD_ENABLE_UPDATES}"
-                self.wsclient.send(self._encrypt(command))
-                keep_alive_task = self.loop.create_task(self.keep_alive())
-                self._pending.append(keep_alive_task)
-                check_still_valid = self.loop.create_task(self.check_token_still_valid())
-                self._pending.append(check_still_valid)
+            elif isinstance(mess_obj, TextMessage) and (
+                "refreshtoken" in mess_obj.message or "refreshjwt" in mess_obj.message
+            ):
+                _LOGGER.debug("Process refreshtoken response")
+                response = LLResponse(mess_obj.message)
+                self._token.token = response.value_as_dict["token"]
+                self._token.valid_until = response.value_as_dict["validUntil"]
+                token_safe_result = self._token.save()
+                if token_safe_result:
+                    _LOGGER.debug("Token saved.")
 
-            elif isinstance(mess_obj, TextMessage) and "enablebinstatusupdate" in mess_obj.message:
-                _LOGGER.debug('Process enablebinstatusupdate response')
+            elif (
+                isinstance(mess_obj, TextMessage)
+                and "authwithtoken" in mess_obj.message
+            ):
+                if mess_obj.code == 200:
+                    _LOGGER.debug("Authentification with token successfully")
+                    command = f"{CMD_ENABLE_UPDATES}"
+                    self.wsclient.send(self._encrypt(command))
+                    keep_alive_task = self.loop.create_task(self.keep_alive())
+                    self._pending.append(keep_alive_task)
+                    check_still_valid = self.loop.create_task(
+                        self.check_token_still_valid()
+                    )
+                    self._pending.append(check_still_valid)
+                elif mess_obj.code == 401:
+                    self._token.delete()
+                    self.
+                else:
+                    raise LoxoneException("Error Connecting")
+            elif (
+                isinstance(mess_obj, TextMessage)
+                and "enablebinstatusupdate" in mess_obj.message
+            ):
+                _LOGGER.debug("Process enablebinstatusupdate response")
 
-            elif isinstance(mess_obj, TextMessage) and "dev/sps/io/" in mess_obj.message:
-                _LOGGER.debug('Process io response')
+            elif isinstance(mess_obj, TextMessage) and "checktoken" in mess_obj.message:
+                _LOGGER.debug("Process checktoken response")
+                if isinstance(mess_obj, TextMessage) and mess_obj.code == 200:
+                    _LOGGER.debug(f"Token is verified for {self._username}.")
+                elif isinstance(mess_obj, TextMessage) and mess_obj.code == 401:
+                    raise LoxoneException("401 - UNAUTHORIZED for check token.")
+                elif isinstance(mess_obj, TextMessage) and mess_obj.code == 400:
+                    raise LoxoneException("400 - BAD_REQUEST for check token.")
+                # Like an 401 but that when the token is no longer valid.
+                elif isinstance(mess_obj, TextMessage) and mess_obj.code == 477:
+                    self._get_key_queue.put(self._refresh())
+                    self.wsclient.send(f"{CMD_GET_KEY}")
+
+            elif (
+                isinstance(mess_obj, TextMessage) and "dev/sps/io/" in mess_obj.message
+            ):
+                _LOGGER.debug("Process io response")
                 if self.message_call_back:
                     await self.message_call_back(mess_obj.message)
 
@@ -397,18 +434,29 @@ class MiniServer:
                     await self.message_call_back(mess_obj.as_dict())
 
             elif isinstance(mess_obj, Keepalive):
-                _LOGGER.debug('Got Keepalive')
+                _LOGGER.debug("Got Keepalive")
 
             elif isinstance(mess_obj, WeatherStatesTable):
-                _LOGGER.debug('Got WeatherStatesTable')
+                _LOGGER.debug("Got WeatherStatesTable")
 
             elif isinstance(mess_obj, DaytimerStatesTable):
-                _LOGGER.debug('Got DaytimerStatesTable')
+                _LOGGER.debug("Got DaytimerStatesTable")
 
             else:
-                _LOGGER.debug('Process <UNKNOWN> response')
-                #_LOGGER.debug("header: {0}-{1}-{2}".format(self.message_header.payload[0], self.message_header.payload[1], self.message_header.payload[2]))
-                #_LOGGER.debug("response: " + self.decrypt_message(message))
+                _LOGGER.debug("Process <UNKNOWN> response")
+                # _LOGGER.debug("header: {0}-{1}-{2}".format(self.message_header.payload[0], self.message_header.payload[1], self.message_header.payload[2]))
+                # _LOGGER.debug("response: " + self.decrypt_message(message))
+
+    async def _refresh(self) -> None:
+        if self._token_hash is not None:
+            if self._version < [10, 2]:
+                command = f"{CMD_REFRESH_TOKEN}{self._token_hash}/{self._username}"
+            else:
+                command = (
+                    f"{CMD_REFRESH_TOKEN_JSON_WEB}{self._token_hash}/{self._username}"
+                )
+            enc_command = self._encrypt(command)
+            self.wsclient.send(enc_command)
 
     async def get_json(self) -> bool:
         """Obtain basic info from the miniserver"""
@@ -520,14 +568,32 @@ class MiniServer:
             raise LoxoneException(exc) from None
         return True
 
-    async def keep_alive(self):
+    async def keep_alive(self) -> None:
+        count = 0
         while self.loop.is_running():
             await asyncio.sleep(KEEP_ALIVE_PERIOD)
             if self.wsclient.state == STATE_RUNNING:
                 self.wsclient.send(CMD_KEEP_ALIVE)
+                count += 1
+                if (
+                    count >= THROTTLE_CHECK_TOKEN_STILL_VALID
+                ):  # Throttle the check_still_valid
+                    _LOGGER.debug("Check if token still valid.")
+                    await self.check_token_still_valid()
+                    count = 0
+
+    async def check_token_still_valid(self) -> None:
+        self._get_key_queue.put(self._check_token_command())
+        self.wsclient.send(f"{CMD_GET_KEY}")
+
+    async def _check_token_command(self) -> None:
+        if self._token_hash:
+            command = f"{CMD_CHECK_TOKEN}{self._token_hash}/{self._username}"
+            enc_command = self._encrypt(command)
+            self.wsclient.send(enc_command)
+
 
 '''
-
 class MiniServer2:
     def __init__(self, hass, config_entry) -> None:
         self.hass = hass
