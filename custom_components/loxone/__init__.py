@@ -161,18 +161,7 @@ async def async_setup_entry(hass, config_entry):
 
     hass.data[DOMAIN][config_entry.unique_id] = miniserver
 
-    # if not await miniserver.async_setup():
-    #     return False
-    #
-    # for platform in LOXONE_PLATFORMS:
-    #     _LOGGER.debug("starting loxone {}...".format(platform))
-    #     hass.async_create_task(
-    #         hass.config_entries.async_forward_entry_setup(config_entry, platform)
-    #     )
-    #     hass.async_create_task(
-    #         async_load_platform(hass, platform, DOMAIN, {}, config_entry)
-    #     )
-    #
+
     # config_entry.add_update_listener(async_config_entry_updated)
     #
     #
@@ -310,12 +299,13 @@ async def async_setup_entry(hass, config_entry):
             if event.event_type == SENDDOMAIN and isinstance(event.data, dict):
                 value = event.data.get(ATTR_VALUE, DEFAULT)
                 device_uuid = event.data.get(ATTR_UUID, DEFAULT)
-                miniserver.wsclient.send(f"jdev/sps/io/{device_uuid}/{value}")
-            # elif event.event_type == SECUREDSENDDOMAIN and isinstance(event.data, dict):
-            #     value = event.data.get(ATTR_VALUE, DEFAULT)
-            #     device_uuid = event.data.get(ATTR_UUID, DEFAULT)
-            #     code = event.data.get(ATTR_CODE, DEFAULT)
-            #     await self.api.send_secured__websocket_command(device_uuid, value, code)
+                miniserver.send(f"jdev/sps/io/{device_uuid}/{value}")
+            elif event.event_type == SECUREDSENDDOMAIN and isinstance(event.data, dict):
+
+                value = event.data.get(ATTR_VALUE, DEFAULT) # 'on/1'
+                device_uuid = event.data.get(ATTR_UUID, DEFAULT) # '18701e91-0026-0e3c-ffff403fb0c34b9e'
+                code = event.data.get(ATTR_CODE, DEFAULT)
+                miniserver.send_secure((device_uuid, value, code))
         except ValueError:
             traceback.print_exc()
 
@@ -342,6 +332,7 @@ async def async_setup_entry(hass, config_entry):
 
     miniserver.async_set_callback(message_callback)
     hass.bus.async_listen(SENDDOMAIN, send_to_loxone)
+    hass.bus.async_listen(SECUREDSENDDOMAIN, send_to_loxone)
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, start_loxone)
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, stop_loxone)
 

@@ -163,10 +163,11 @@ class MiniServer:
             None  # None = no TLS, 1 = TLS available, 2 = cert expired
         )
         self.loop = None
-        self.wsclient = None
+        self.wsclient :WSClient = None
         self.async_connection_status_callback = None
         self._pending = []
         self._get_key_queue = queue.Queue(maxsize=20)
+        self._secured_queue = queue.Queue(maxsize=1)
 
     @property
     def loxone_config(self):
@@ -206,6 +207,19 @@ class MiniServer:
         if state == STATE_RUNNING:
             command = f"{CMD_KEY_EXCHANGE}{self._session_key.decode()}"
             self.wsclient.send(command)
+
+    def add_async_command_with_get_key(self, coro):
+        self._get_key_queue.put(coro)
+        self.wsclient.send(f"{CMD_GET_KEY}")
+
+    def send(self, command):
+        self.wsclient.send(command)
+
+    def send_secure(self, secure_queue_para):
+        self._secured_queue.put(secure_queue_para)
+        command = "{}{}".format(CMD_GET_VISUAL_PASSWD, self._username)
+        enc_command = self._encrypt(command)
+        self.wsclient.send(enc_command)
 
     def _encrypt(self, command: str) -> str:
         # if not self._encryption_ready:
@@ -309,12 +323,10 @@ class MiniServer:
 
                 if self._token.is_loaded and self._token.seconds_to_expire() > 300:
                     _LOGGER.debug("Token successfully loaded from file")
-                    command = f"{CMD_GET_KEY}"
-                    self.wsclient.send(self._encrypt(command))
+                    self.wsclient.send(self._encrypt(f"{CMD_GET_KEY}"))
                 else:
                     _LOGGER.debug("Token could not load or expired.")
-                    command = f"{CMD_GET_KEY_AND_SALT}{self._username}"
-                    self.wsclient.send(self._encrypt(command))
+                    self.wsclient.send(self._encrypt(f"{CMD_GET_KEY_AND_SALT}{self._username}"))
 
             elif isinstance(mess_obj, TextMessage) and "getkey2" in mess_obj.message:
                 # Response of CMD_GET_KEY_AND_SALT. Request a new Token
@@ -366,8 +378,7 @@ class MiniServer:
                 token_safe_result = self._token.save()
                 if token_safe_result:
                     _LOGGER.debug("Token saved.")
-                command = f"{CMD_ENABLE_UPDATES}"
-                self.wsclient.send(self._encrypt(command))
+                self.wsclient.send(self._encrypt(f"{CMD_ENABLE_UPDATES}"))
 
             elif isinstance(mess_obj, TextMessage) and (
                 "refreshtoken" in mess_obj.message or "refreshjwt" in mess_obj.message
@@ -390,15 +401,13 @@ class MiniServer:
                     self.wsclient.send(self._encrypt(command))
                     keep_alive_task = self.loop.create_task(self.keep_alive())
                     self._pending.append(keep_alive_task)
-                    check_still_valid = self.loop.create_task(
-                        self.check_token_still_valid()
-                    )
-                    self._pending.append(check_still_valid)
-                elif mess_obj.code == 401:
-                    self._token.delete()
-                    self.
+                    # check_still_valid = self.loop.create_task(
+                    #     self.check_token_still_valid()
+                    # )
+                    # self._pending.append(check_still_valid)
                 else:
-                    raise LoxoneException("Error Connecting")
+                    _LOGGER.debug("Authentification with token not successfully. Old token will be deleted.")
+                    self._token.delete()
             elif (
                 isinstance(mess_obj, TextMessage)
                 and "enablebinstatusupdate" in mess_obj.message
@@ -415,8 +424,25 @@ class MiniServer:
                     raise LoxoneException("400 - BAD_REQUEST for check token.")
                 # Like an 401 but that when the token is no longer valid.
                 elif isinstance(mess_obj, TextMessage) and mess_obj.code == 477:
-                    self._get_key_queue.put(self._refresh())
-                    self.wsclient.send(f"{CMD_GET_KEY}")
+                    self.add_async_command_with_get_key(self._refresh())
+
+            elif isinstance(mess_obj, TextMessage) and "getvisusalt" in mess_obj.message:
+                if mess_obj.code == 200:
+                    mess_obj_dict = mess_obj.as_dict()
+                    key = mess_obj_dict.get("key", None)
+                    salt = mess_obj_dict.get("salt", None)
+                    hash_alg = mess_obj_dict.get("hashAlg", None)
+                    visual_key_and_salt = LxJsonKeySalt(key, salt, hash_alg)
+
+                    # digester = self._hash_credentials(visual_key_and_salt)
+                    # while not self._secured_queue.empty():
+                    #     secured_message = self._secured_queue.get()
+                    #
+                    #     command = "jdev/sps/ios/{}/{}/{}".format(
+                    #         digester.hexdigest(), device_uuid, value
+                    #     )
+
+
 
             elif (
                 isinstance(mess_obj, TextMessage) and "dev/sps/io/" in mess_obj.message
@@ -579,163 +605,11 @@ class MiniServer:
                     count >= THROTTLE_CHECK_TOKEN_STILL_VALID
                 ):  # Throttle the check_still_valid
                     _LOGGER.debug("Check if token still valid.")
-                    await self.check_token_still_valid()
+                    self.add_async_command_with_get_key(self._check_token_command())
                     count = 0
-
-    async def check_token_still_valid(self) -> None:
-        self._get_key_queue.put(self._check_token_command())
-        self.wsclient.send(f"{CMD_GET_KEY}")
 
     async def _check_token_command(self) -> None:
         if self._token_hash:
             command = f"{CMD_CHECK_TOKEN}{self._token_hash}/{self._username}"
             enc_command = self._encrypt(command)
             self.wsclient.send(enc_command)
-
-
-'''
-class MiniServer2:
-    def __init__(self, hass, config_entry) -> None:
-        self.hass = hass
-        self.config_entry = config_entry
-        self.api = None
-        self.callback = None
-        self.entities = {}
-        self.listeners = []
-
-    @callback
-    def async_signal_new_device(self, device_type) -> str:
-        """Gateway specific event to signal new device."""
-        new_device = {
-            NEW_GROUP: f"loxone_new_group_{self.miniserverid}",
-            NEW_LIGHT: f"loxone_new_light_{self.miniserverid}",
-            NEW_SCENE: f"loxone_new_scene_{self.miniserverid}",
-            NEW_SENSOR: f"loxone_new_sensor_{self.miniserverid}",
-            NEW_COVERS: f"loxone_new_cover_{self.miniserverid}",
-        }
-        return new_device[device_type]
-
-    @callback
-    async def async_loxone_callback(self, message) -> None:
-        """Handle event from pyloxone-api."""
-        self.hass.async_fire(EVENT, message)
-
-    @property
-    def serial(self):
-        try:
-            return self.api.json["msInfo"]["serialNr"]
-        except:
-            return None
-
-    @property
-    def name(self):
-        try:
-            return self.api.json["msInfo"]["msName"]
-        except:
-            return None
-
-    @property
-    def software_version(self):
-        try:
-            return ".".join([str(x) for x in self.api.json["softwareVersion"]])
-        except:
-            return None
-
-    @property
-    def miniserver_type(self):
-        try:
-            return self.api.json["msInfo"]["miniserverType"]
-        except:
-            return None
-
-    @callback
-    async def shutdown(self, event) -> None:
-        await self.api.stop()
-
-    async def async_setup(self) -> bool:
-        try:
-            self.api = LoxAPI(
-                host=self.config_entry.options[CONF_HOST],
-                port=self.config_entry.options[CONF_PORT],
-                user=self.config_entry.options[CONF_USERNAME],
-                password=self.config_entry.options[CONF_PASSWORD],
-            )
-            await self.api.getJson()
-            # self.api.config_dir = get_default_config_dir()
-            self.api.config_dir = ""
-            await self.api.async_init()
-
-        except ConnectionError:
-            _LOGGER.error("Error connecting to loxone miniserver. See error log.")
-            return False
-        except:
-            traceback.print_exc()
-        return True
-
-    async def async_set_callback(self, message_callback):
-        self.api.message_call_back = message_callback
-
-    async def start_loxone(self, event):
-        await self.api.start()
-
-    async def stop_loxone(self, event):
-        _ = await self.api.stop()
-        _LOGGER.debug(_)
-
-    async def listen_loxone_send(self, event):
-        """Listen for change Events from Loxone Components"""
-        try:
-            if event.event_type == SENDDOMAIN and isinstance(event.data, dict):
-                value = event.data.get(ATTR_VALUE, DEFAULT)
-                device_uuid = event.data.get(ATTR_UUID, DEFAULT)
-                await self.api.send_websocket_command(device_uuid, value)
-
-            elif event.event_type == SECUREDSENDDOMAIN and isinstance(event.data, dict):
-                value = event.data.get(ATTR_VALUE, DEFAULT)
-                device_uuid = event.data.get(ATTR_UUID, DEFAULT)
-                code = event.data.get(ATTR_CODE, DEFAULT)
-                await self.api.send_secured__websocket_command(device_uuid, value, code)
-
-        except ValueError:
-            traceback.print_exc()
-
-    async def handle_websocket_command(self, call):
-        """Handle websocket command services."""
-        value = call.data.get(ATTR_VALUE, DEFAULT)
-        device_uuid = call.data.get(ATTR_UUID, DEFAULT)
-        await self.api.send_websocket_command(device_uuid, value)
-
-    async def async_update_device_registry(self) -> None:
-        device_registry = await self.hass.helpers.device_registry.async_get_registry()
-
-        # Host device
-        # device_registry.async_get_or_create(
-        #     config_entry_id=self.config_entry.entry_id,
-        #     connections={
-        #         (CONNECTION_NETWORK_MAC, self.config_entry.options[CONF_HOST])
-        #     },
-        # )
-
-        # Miniserver service
-        device_registry.async_get_or_create(
-            config_entry_id=self.config_entry.entry_id,
-            connections={
-                (CONNECTION_NETWORK_MAC, self.config_entry.options[CONF_HOST])
-            },
-            identifiers={(DOMAIN, self.serial)},
-            name=self.name,
-            manufacturer="Loxone",
-            sw_version=self.software_version,
-            model=get_miniserver_type(self.miniserver_type),
-        )
-
-    @property
-    def host(self) -> str:
-        """Return the host of the miniserver."""
-        return self.config_entry.data[CONF_HOST]
-
-    @property
-    def miniserverid(self) -> str:
-        """Return the unique identifier of the Miniserver."""
-        return self.config_entry.unique_id
-'''
