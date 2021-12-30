@@ -301,7 +301,6 @@ async def async_setup_entry(hass, config_entry):
                 device_uuid = event.data.get(ATTR_UUID, DEFAULT)
                 miniserver.send(f"jdev/sps/io/{device_uuid}/{value}")
             elif event.event_type == SECUREDSENDDOMAIN and isinstance(event.data, dict):
-
                 value = event.data.get(ATTR_VALUE, DEFAULT) # 'on/1'
                 device_uuid = event.data.get(ATTR_UUID, DEFAULT) # '18701e91-0026-0e3c-ffff403fb0c34b9e'
                 code = event.data.get(ATTR_CODE, DEFAULT)
@@ -335,6 +334,10 @@ async def async_setup_entry(hass, config_entry):
     hass.bus.async_listen(SECUREDSENDDOMAIN, send_to_loxone)
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, start_loxone)
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, stop_loxone)
+
+    # hass.services.async_register(
+    #     DOMAIN, "event_websocket_command", handle_websocket_command
+    # )
 
     return True
 

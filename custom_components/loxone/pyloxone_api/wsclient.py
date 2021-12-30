@@ -14,6 +14,7 @@ STATE_STOPPED = "stopped"
 CONNECTING = "connecting"
 
 RETRY_TIMER = 20
+RETRY_COUTNER = 5
 
 
 class WSClient:
@@ -41,6 +42,7 @@ class WSClient:
         self.password = password
         self._state = None
         self._use_tls = use_tls
+        self._reconnect_counter = 0
 
         self.async_session_handler_callback = async_session_callback
         self.async_message_handler_callback = async_message_callback
@@ -81,17 +83,14 @@ class WSClient:
             self.session = aiohttp.ClientSession()
             self.ws = await self.session.ws_connect(url, protocols=("remotecontrol"))
             self.state = STATE_RUNNING
+            self._reconnect_counter = 0
 
             async for msg in self.ws:
                 if self.state == STATE_STOPPED:
                     break
                 elif msg.type == aiohttp.WSMsgType.BINARY:
-                    _LOGGER.debug(
-                        "Websocket BINARY data: {0}".format(binascii.hexlify(msg.data))
-                    )
                     await self.async_message_handler_callback(msg.data, True)
                 elif msg.type == aiohttp.WSMsgType.TEXT:
-                    _LOGGER.debug("Websocket TEXT data: {0}".format(msg.data))
                     await self.async_message_handler_callback(msg.data, False)
                 elif msg.type == aiohttp.WSMsgType.CLOSED:
                     _LOGGER.debug("CLOSED")
@@ -120,8 +119,10 @@ class WSClient:
 
     def retry(self):
         """Retry to connect."""
-        self.loop.call_later(RETRY_TIMER, self.start)
-        _LOGGER.debug("Reconnecting in %i.", RETRY_TIMER)
+        self._reconnect_counter += 1
+        if self._reconnect_counter >= RETRY_COUTNER:
+            self.loop.call_later(RETRY_TIMER, self.start)
+            _LOGGER.debug("Reconnecting in %i.", RETRY_TIMER)
 
     def send(self, message):
         """send"""

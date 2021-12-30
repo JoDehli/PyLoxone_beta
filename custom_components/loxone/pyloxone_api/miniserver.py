@@ -163,7 +163,7 @@ class MiniServer:
             None  # None = no TLS, 1 = TLS available, 2 = cert expired
         )
         self.loop = None
-        self.wsclient :WSClient = None
+        self.wsclient: WSClient = None
         self.async_connection_status_callback = None
         self._pending = []
         self._get_key_queue = queue.Queue(maxsize=20)
@@ -326,7 +326,9 @@ class MiniServer:
                     self.wsclient.send(self._encrypt(f"{CMD_GET_KEY}"))
                 else:
                     _LOGGER.debug("Token could not load or expired.")
-                    self.wsclient.send(self._encrypt(f"{CMD_GET_KEY_AND_SALT}{self._username}"))
+                    self.wsclient.send(
+                        self._encrypt(f"{CMD_GET_KEY_AND_SALT}{self._username}")
+                    )
 
             elif isinstance(mess_obj, TextMessage) and "getkey2" in mess_obj.message:
                 # Response of CMD_GET_KEY_AND_SALT. Request a new Token
@@ -399,14 +401,16 @@ class MiniServer:
                     _LOGGER.debug("Authentification with token successfully")
                     command = f"{CMD_ENABLE_UPDATES}"
                     self.wsclient.send(self._encrypt(command))
-                    keep_alive_task = self.loop.create_task(self.keep_alive())
+                    keep_alive_task = self.loop.create_task(self._keep_alive())
                     self._pending.append(keep_alive_task)
                     # check_still_valid = self.loop.create_task(
                     #     self.check_token_still_valid()
                     # )
                     # self._pending.append(check_still_valid)
                 else:
-                    _LOGGER.debug("Authentification with token not successfully. Old token will be deleted.")
+                    _LOGGER.debug(
+                        "Authentification with token not successfully. Old token will be deleted."
+                    )
                     self._token.delete()
             elif (
                 isinstance(mess_obj, TextMessage)
@@ -426,28 +430,55 @@ class MiniServer:
                 elif isinstance(mess_obj, TextMessage) and mess_obj.code == 477:
                     self.add_async_command_with_get_key(self._refresh())
 
-            elif isinstance(mess_obj, TextMessage) and "getvisusalt" in mess_obj.message:
+            elif (
+                isinstance(mess_obj, TextMessage) and "getvisusalt" in mess_obj.message
+            ):
                 if mess_obj.code == 200:
-                    mess_obj_dict = mess_obj.as_dict()
+                    mess_obj_dict = mess_obj.value_as_dict
                     key = mess_obj_dict.get("key", None)
                     salt = mess_obj_dict.get("salt", None)
                     hash_alg = mess_obj_dict.get("hashAlg", None)
                     visual_key_and_salt = LxJsonKeySalt(key, salt, hash_alg)
+                    while not self._secured_queue.empty():
+                        device_uuid, value, code = self._secured_queue.get()
+                        pwd_hash_str = code + ":" + visual_key_and_salt.salt
+                        if visual_key_and_salt.hash_alg == "SHA1":
+                            m = hashlib.sha1()
+                        elif visual_key_and_salt.hash_alg == "SHA256":
+                            m = hashlib.sha256()
+                        m.update(pwd_hash_str.encode("utf-8"))
+                        pwd_hash = m.hexdigest().upper()
+                        import binascii
 
-                    # digester = self._hash_credentials(visual_key_and_salt)
-                    # while not self._secured_queue.empty():
-                    #     secured_message = self._secured_queue.get()
-                    #
-                    #     command = "jdev/sps/ios/{}/{}/{}".format(
-                    #         digester.hexdigest(), device_uuid, value
-                    #     )
-
+                        if visual_key_and_salt.hash_alg == "SHA1":
+                            digester = HMAC.new(
+                                binascii.unhexlify(visual_key_and_salt.key),
+                                pwd_hash.encode("utf-8"),
+                                SHA1,
+                            )
+                        elif visual_key_and_salt.hash_alg == "SHA256":
+                            digester = HMAC.new(
+                                binascii.unhexlify(visual_key_and_salt.key),
+                                pwd_hash.encode("utf-8"),
+                                SHA256,
+                            )
+                        command = "jdev/sps/ios/{}/{}/{}".format(
+                            digester.hexdigest(), device_uuid, value
+                        )
+                        self.wsclient.send(command)
 
 
             elif (
                 isinstance(mess_obj, TextMessage) and "dev/sps/io/" in mess_obj.message
             ):
                 _LOGGER.debug("Process io response")
+                if self.message_call_back:
+                    await self.message_call_back(mess_obj.message)
+
+            elif (
+                isinstance(mess_obj, TextMessage) and "dev/sps/ios/" in mess_obj.message
+            ):
+                _LOGGER.debug("Process ios response")
                 if self.message_call_back:
                     await self.message_call_back(mess_obj.message)
 
@@ -484,7 +515,7 @@ class MiniServer:
             enc_command = self._encrypt(command)
             self.wsclient.send(enc_command)
 
-    async def get_json(self) -> bool:
+    async def _get_json(self) -> bool:
         """Obtain basic info from the miniserver"""
         # All initial http/https requests are carried out here, for simplicity. They
         # can all use the same httpx.AsyncClient instance. Any non-200 response from
@@ -571,12 +602,20 @@ class MiniServer:
         finally:
             # Async httpx client must always be closed
             await client.aclose()
-            return True
+            if self.json:
+                return True
+            else:
+                return False
 
     async def async_setup(self) -> bool:
-        json_res = await self.get_json()
+        json_res = await self._get_json()
         if not json_res:
-            _LOGGER.error("Error getting public key and config json.")
+            _LOGGER.error(
+                "Error getting public key and config json. Please check host and port."
+            )
+            _LOGGER.error(
+                "Try to get json reponse via browser by visiting the http://{ip-address-of-your-loxone}:{port}/data/LoxAPP3.json"
+            )
             return False
 
         rsa_cipher = get_public_key(self._public_key)
@@ -594,7 +633,7 @@ class MiniServer:
             raise LoxoneException(exc) from None
         return True
 
-    async def keep_alive(self) -> None:
+    async def _keep_alive(self) -> None:
         count = 0
         while self.loop.is_running():
             await asyncio.sleep(KEEP_ALIVE_PERIOD)

@@ -23,7 +23,7 @@ class LoxToken:
         self.token_filename = token_filename
         self.load()
 
-    def seconds_to_expire(self, valid_until: int=None) -> int:
+    def seconds_to_expire(self, valid_until: int = None) -> int:
         # Loxone epoch is 1.1.2009
         loxone_epoch = datetime(2009, 1, 1, 0, 0)
         # current number of seconds since epoch
@@ -49,7 +49,6 @@ class LoxToken:
             _LOGGER.debug(f"Cannot load token from {persist_token}")
             self.token = ""
         _LOGGER.debug(f"load_token successfully from {persist_token}")
-
 
     def save(self) -> bool:
         try:
