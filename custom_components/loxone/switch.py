@@ -9,12 +9,13 @@ import logging
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import STATE_UNKNOWN
 
-from . import LoxoneEntity
+from . import LoxoneEntity, get_miniserver_from_config_entry
 from .const import DOMAIN, SENDDOMAIN
-from .helpers import (get_all_switch_entities, get_cat_name_from_cat_uuid,
-                      get_room_name_from_room_uuid)
-from . import get_miniserver_from_config_entry
-
+from .helpers import (
+    get_all_switch_entities,
+    get_cat_name_from_cat_uuid,
+    get_room_name_from_room_uuid,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -194,7 +195,7 @@ class LoxoneTimedSwitch(LoxoneEntity, SwitchEntity):
             "name": self.name,
             "manufacturer": "Loxone",
             "model": self.type,
-            "suggested_area": self.room
+            "suggested_area": self.room,
         }
 
 
@@ -284,7 +285,7 @@ class LoxoneSwitch(LoxoneEntity, SwitchEntity):
             "name": self.name,
             "manufacturer": "Loxone",
             "model": self.type,
-            "suggested_area": self.room
+            "suggested_area": self.room,
         }
 
 
@@ -320,5 +321,5 @@ class LoxoneIntercomSubControl(LoxoneSwitch):
             "name": self.name,
             "manufacturer": "Loxone",
             "model": self.type,
-            "suggested_area": self.room
+            "suggested_area": self.room,
         }

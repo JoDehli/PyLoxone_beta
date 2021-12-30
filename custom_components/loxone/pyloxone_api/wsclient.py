@@ -1,10 +1,11 @@
 """Represent the client session."""
 
 import asyncio
-import logging
-import datetime
-import aiohttp
 import binascii
+import datetime
+import logging
+
+import aiohttp
 
 _LOGGER = logging.getLogger(__name__)
 

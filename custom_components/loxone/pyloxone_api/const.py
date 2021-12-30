@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from typing import Final
 
-
 # Loxone constants
 TIMEOUT: Final = 10
 KEEP_ALIVE_PERIOD: Final = 240

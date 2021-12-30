@@ -5,40 +5,60 @@ import hashlib
 import json
 import logging
 import queue
-import ssl
 import time
 import traceback
 import urllib.parse
 from base64 import b64decode, b64encode
 from collections import namedtuple
-from typing import Any, Callable, NoReturn, Optional
 
 import httpx
-import websockets as wslib
 from Crypto.Cipher import AES, PKCS1_v1_5
 from Crypto.Hash import HMAC, SHA1, SHA256
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 from Crypto.Util import Padding
 
-from .const import (AES_KEY_SIZE, CMD_AUTH_WITH_TOKEN, CMD_CHECK_TOKEN,
-                    CMD_ENABLE_UPDATES, CMD_ENCRYPT_CMD, CMD_GET_KEY,
-                    CMD_GET_KEY_AND_SALT, CMD_GET_PUBLIC_KEY,
-                    CMD_GET_VISUAL_PASSWD, CMD_KEEP_ALIVE, CMD_KEY_EXCHANGE,
-                    CMD_REFRESH_TOKEN, CMD_REFRESH_TOKEN_JSON_WEB,
-                    CMD_REQUEST_TOKEN, CMD_REQUEST_TOKEN_JSON_WEB,
-                    DEFAULT_TOKEN_PERSIST_NAME, IV_BYTES, KEEP_ALIVE_PERIOD,
-                    LOXAPPPATH, MAX_REFRESH_DELAY, SALT_BYTES,
-                    SALT_MAX_AGE_SECONDS, SALT_MAX_USE_COUNT,
-                    THROTTLE_CHECK_TOKEN_STILL_VALID, TIMEOUT,
-                    TOKEN_PERMISSION)
-from .exceptions import (LoxoneException, LoxoneHTTPStatusError,
-                         LoxoneRequestError)
+from .const import (
+    AES_KEY_SIZE,
+    CMD_AUTH_WITH_TOKEN,
+    CMD_CHECK_TOKEN,
+    CMD_ENABLE_UPDATES,
+    CMD_ENCRYPT_CMD,
+    CMD_GET_KEY,
+    CMD_GET_KEY_AND_SALT,
+    CMD_GET_PUBLIC_KEY,
+    CMD_GET_VISUAL_PASSWD,
+    CMD_KEEP_ALIVE,
+    CMD_KEY_EXCHANGE,
+    CMD_REFRESH_TOKEN,
+    CMD_REFRESH_TOKEN_JSON_WEB,
+    CMD_REQUEST_TOKEN,
+    CMD_REQUEST_TOKEN_JSON_WEB,
+    DEFAULT_TOKEN_PERSIST_NAME,
+    IV_BYTES,
+    KEEP_ALIVE_PERIOD,
+    LOXAPPPATH,
+    SALT_BYTES,
+    SALT_MAX_AGE_SECONDS,
+    SALT_MAX_USE_COUNT,
+    THROTTLE_CHECK_TOKEN_STILL_VALID,
+    TIMEOUT,
+    TOKEN_PERMISSION,
+)
+from .exceptions import LoxoneException, LoxoneHTTPStatusError, LoxoneRequestError
 from .loxtoken import LoxToken
-from .message import (DaytimerStatesTable, Keepalive, LLResponse,
-                      MessageHeader, TextMessage, TextStatesTable,
-                      ValueStatesTable, WeatherStatesTable, parse_message)
-from .wsclient import STATE_RUNNING, STATE_STARTING, STATE_STOPPED, WSClient
+from .message import (
+    DaytimerStatesTable,
+    Keepalive,
+    LLResponse,
+    MessageHeader,
+    TextMessage,
+    TextStatesTable,
+    ValueStatesTable,
+    WeatherStatesTable,
+    parse_message,
+)
+from .wsclient import STATE_RUNNING, WSClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -466,7 +486,6 @@ class MiniServer:
                             digester.hexdigest(), device_uuid, value
                         )
                         self.wsclient.send(command)
-
 
             elif (
                 isinstance(mess_obj, TextMessage) and "dev/sps/io/" in mess_obj.message

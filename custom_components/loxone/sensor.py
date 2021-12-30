@@ -9,17 +9,27 @@ import logging
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity
-from homeassistant.const import (CONF_DEVICE_CLASS, CONF_NAME,
-                                 CONF_UNIT_OF_MEASUREMENT, CONF_VALUE_TEMPLATE,
-                                 STATE_OFF, STATE_ON, STATE_UNKNOWN)
+from homeassistant.const import (
+    CONF_DEVICE_CLASS,
+    CONF_NAME,
+    CONF_UNIT_OF_MEASUREMENT,
+    CONF_VALUE_TEMPLATE,
+    STATE_OFF,
+    STATE_ON,
+    STATE_UNKNOWN,
+)
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from . import LoxoneEntity
+from . import LoxoneEntity, get_miniserver_from_config_entry
 from .const import CONF_ACTIONID, DOMAIN, SENDDOMAIN
-from .helpers import (get_all, get_all_analog_info, get_all_digital_info,
-                      get_cat_name_from_cat_uuid, get_room_name_from_room_uuid)
-from . import get_miniserver_from_config_entry
+from .helpers import (
+    get_all,
+    get_all_analog_info,
+    get_all_digital_info,
+    get_cat_name_from_cat_uuid,
+    get_room_name_from_room_uuid,
+)
 
 NEW_SENSOR = "sensors"
 
@@ -340,7 +350,7 @@ class Loxonesensor(LoxoneEntity, SensorEntity):
                 "manufacturer": "Loxone",
                 "model": "Sensor analog",
                 "type": self.typ,
-                "suggested_area": self.room
+                "suggested_area": self.room,
             }
         else:
             return {
@@ -349,5 +359,5 @@ class Loxonesensor(LoxoneEntity, SensorEntity):
                 "manufacturer": "Loxone",
                 "model": "Sensor digital",
                 "type": self.typ,
-                "suggested_area": self.room
+                "suggested_area": self.room,
             }

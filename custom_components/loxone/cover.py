@@ -8,27 +8,41 @@ https://github.com/JoDehli/PyLoxone
 import logging
 from typing import Any
 
-from homeassistant.components.cover import (ATTR_POSITION, ATTR_TILT_POSITION,
-                                            DEVICE_CLASS_AWNING,
-                                            DEVICE_CLASS_BLIND,
-                                            DEVICE_CLASS_CURTAIN,
-                                            DEVICE_CLASS_DOOR,
-                                            DEVICE_CLASS_GARAGE,
-                                            DEVICE_CLASS_SHUTTER,
-                                            DEVICE_CLASS_WINDOW, SUPPORT_CLOSE,
-                                            SUPPORT_OPEN, CoverEntity)
+from homeassistant.components.cover import (
+    ATTR_POSITION,
+    ATTR_TILT_POSITION,
+    DEVICE_CLASS_AWNING,
+    DEVICE_CLASS_BLIND,
+    DEVICE_CLASS_CURTAIN,
+    DEVICE_CLASS_DOOR,
+    DEVICE_CLASS_GARAGE,
+    DEVICE_CLASS_SHUTTER,
+    DEVICE_CLASS_WINDOW,
+    SUPPORT_CLOSE,
+    SUPPORT_OPEN,
+    CoverEntity,
+)
 from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import track_utc_time_change
 
-from . import LoxoneEntity
-from .const import (DOMAIN, SENDDOMAIN, SUPPORT_CLOSE_TILT, SUPPORT_OPEN_TILT,
-                    SUPPORT_SET_POSITION, SUPPORT_SET_TILT_POSITION,
-                    SUPPORT_STOP, SUPPORT_STOP_TILT)
-from .helpers import (get_all_covers, get_cat_name_from_cat_uuid,
-                      get_room_name_from_room_uuid)
-from . import get_miniserver_from_config_entry
+from . import LoxoneEntity, get_miniserver_from_config_entry
+from .const import (
+    DOMAIN,
+    SENDDOMAIN,
+    SUPPORT_CLOSE_TILT,
+    SUPPORT_OPEN_TILT,
+    SUPPORT_SET_POSITION,
+    SUPPORT_SET_TILT_POSITION,
+    SUPPORT_STOP,
+    SUPPORT_STOP_TILT,
+)
+from .helpers import (
+    get_all_covers,
+    get_cat_name_from_cat_uuid,
+    get_room_name_from_room_uuid,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -205,7 +219,7 @@ class LoxoneGate(LoxoneEntity, CoverEntity):
             "manufacturer": "Loxone",
             "model": "Gate",
             "type": self.type,
-            "suggested_area": self.room
+            "suggested_area": self.room,
         }
 
 
@@ -318,7 +332,7 @@ class LoxoneWindow(LoxoneEntity, CoverEntity):
             "name": self.name,
             "manufacturer": "Loxone",
             "model": "Window",
-             "suggested_area": self.room
+            "suggested_area": self.room,
         }
 
 
@@ -625,5 +639,5 @@ class LoxoneJalousie(LoxoneEntity, CoverEntity):
             "manufacturer": "Loxone",
             "model": "Jalousie",
             "type": self.type,
-            "suggested_area": self.room
+            "suggested_area": self.room,
         }
