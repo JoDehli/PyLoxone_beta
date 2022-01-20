@@ -27,14 +27,18 @@ _LOGGER.addHandler(logging.StreamHandler())
 
 async def main() -> None:
 
-    api = MiniServer(
-        user=sys.argv[1], password=sys.argv[2], host=sys.argv[3], port=int(sys.argv[4])
+    miniserver = MiniServer(
+        host=sys.argv[3],
+        port=int(sys.argv[4]),
+        username=sys.argv[1],
+        password=sys.argv[2],
     )
-
-    await api.getJson()
-    await api.async_init()
-    await api.start()
-
+    setup_succeded = await miniserver.async_setup()
+    connection_status = None
+    if setup_succeded:
+        miniserver.connect(
+            loop=asyncio.get_running_loop(), connection_status=connection_status
+        )
 
 if __name__ == "__main__":
     try:
