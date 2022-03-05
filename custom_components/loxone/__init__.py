@@ -12,15 +12,10 @@ import traceback
 
 import homeassistant.components.group as group
 import voluptuous as vol
-from homeassistant.const import (
-    CONF_HOST,
-    CONF_PASSWORD,
-    CONF_PORT,
-    CONF_USERNAME,
-    EVENT_COMPONENT_LOADED,
-    EVENT_HOMEASSISTANT_START,
-    EVENT_HOMEASSISTANT_STOP,
-)
+from homeassistant.const import (CONF_HOST, CONF_PASSWORD, CONF_PORT,
+                                 CONF_USERNAME, EVENT_COMPONENT_LOADED,
+                                 EVENT_HOMEASSISTANT_START,
+                                 EVENT_HOMEASSISTANT_STOP)
 from homeassistant.core import callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
@@ -28,34 +23,19 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.discovery import async_load_platform
 from homeassistant.helpers.entity import Entity
 
-
-from pyloxone_api.miniserver import MiniServer
 from .helpers import get_miniserver_type
-
+from .pyloxone_api.miniserver import MiniServer
 
 # from .miniserver import MiniServer, get_miniserver_from_config_entry
 
-REQUIREMENTS = ["websockets", "pycryptodome", "numpy", "requests_async"]
+REQUIREMENTS = ["websockets", "pycryptodome", "numpy"]
 
-from .const import (
-    ATTR_CODE,
-    ATTR_COMMAND,
-    ATTR_UUID,
-    ATTR_VALUE,
-    CONF_LIGHTCONTROLLER_SUBCONTROLS_GEN,
-    CONF_SCENE_GEN,
-    CONF_SCENE_GEN_DELAY,
-    DEFAULT,
-    DEFAULT_DELAY_SCENE,
-    DEFAULT_PORT,
-    DOMAIN,
-    DOMAIN_DEVICES,
-    EVENT,
-    LOXONE_PLATFORMS,
-    SECUREDSENDDOMAIN,
-    SENDDOMAIN,
-    cfmt,
-)
+from .const import (ATTR_AREA_CREATE, ATTR_CODE, ATTR_COMMAND, ATTR_UUID,
+                    ATTR_VALUE, CONF_LIGHTCONTROLLER_SUBCONTROLS_GEN,
+                    CONF_SCENE_GEN, CONF_SCENE_GEN_DELAY, DEFAULT,
+                    DEFAULT_DELAY_SCENE, DEFAULT_PORT, DOMAIN, DOMAIN_DEVICES,
+                    EVENT, LOXONE_PLATFORMS, SECUREDSENDDOMAIN, SENDDOMAIN,
+                    cfmt)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -88,7 +68,7 @@ _UNDEF: dict = {}
 @callback
 def get_miniserver_from_config_entry(hass, config_entry) -> MiniServer:
     """Return Miniserver with a matching bridge id."""
-    return hass.data[DOMAIN][config_entry.unique_id]
+    return hass.data[DOMAIN][config_entry.entry_id]
 
 
 @callback
@@ -175,38 +155,50 @@ async def async_setup_entry(hass, config_entry):
         return False
 
     connection_status = None
-
+    setup_tasks = []
     for platform in LOXONE_PLATFORMS:
         _LOGGER.debug("starting loxone {}...".format(platform))
         hass.async_create_task(
             hass.config_entries.async_forward_entry_setup(config_entry, platform)
         )
-        hass.async_create_task(
-            async_load_platform(hass, platform, DOMAIN, {}, config_entry)
+        setup_tasks.append(
+            hass.async_create_task(
+                async_load_platform(hass, platform, DOMAIN, {}, config_entry)
+            )
         )
 
-    hass.data[DOMAIN][config_entry.unique_id] = miniserver
+    if setup_tasks:
+        await asyncio.wait(setup_tasks)
+    config_entry.add_update_listener(async_config_entry_updated)
+    hass.data[DOMAIN][config_entry.entry_id] = miniserver
 
     # config_entry.add_update_listener(async_config_entry_updated)
     #
     #
     # new_data = _UNDEF
 
-    # if config_entry.unique_id is None:
-    #     hass.config_entries.async_update_entry(
-    #         config_entry, unique_id=miniserver.serial, data=new_data
-    #     )
-    #     # Workaround
-    #     await asyncio.sleep(5)
-    #
-    # hass.data[DOMAIN][config_entry.unique_id] = miniserver
-    #
-    # await miniserver.async_update_device_registry()
-    #
-    # async def message_callback(message):
-    #     """Fire message on HomeAssistant Bus."""
-    #     hass.bus.async_fire(EVENT, message)
-    #
+    async def sync_areas_with_loxone(data={}):
+        create_areas = data.get(ATTR_AREA_CREATE, DEFAULT)
+        if create_areas not in [True, False]:
+            create_areas = False
+        lox_items = []
+        er_registry = er.async_get(hass)
+        ar_registry = ar.async_get(hass)
+        for id, entry in er_registry.entities.items():
+            if entry.platform == DOMAIN:
+                state = hass.states.get(entry.entity_id)
+                if hasattr(state, "attributes") and "room" in state.attributes:
+                    area = ar_registry.async_get_area_by_name(state.attributes["room"])
+                    if area is None and create_areas:
+                        area = ar_registry.async_get_or_create(state.attributes["room"])
+                    if area and entry.area_id is None:
+                        lox_items.append((entry.entity_id, area.id))
+
+        for _ in lox_items:
+            er_registry.async_update_entity(_[0], area_id=_[1])
+
+    async def handle_sync_areas_with_loxone(call):
+        await sync_areas_with_loxone(call.data)
 
     async def loxone_discovered(event):
         if "component" in event.data:
@@ -317,10 +309,8 @@ async def async_setup_entry(hass, config_entry):
                 device_uuid = event.data.get(ATTR_UUID, DEFAULT)
                 miniserver.send(f"jdev/sps/io/{device_uuid}/{value}")
             elif event.event_type == SECUREDSENDDOMAIN and isinstance(event.data, dict):
-                value = event.data.get(ATTR_VALUE, DEFAULT)  # 'on/1'
-                device_uuid = event.data.get(
-                    ATTR_UUID, DEFAULT
-                )  # '18701e91-0026-0e3c-ffff403fb0c34b9e'
+                value = event.data.get(ATTR_VALUE, DEFAULT)
+                device_uuid = event.data.get(ATTR_UUID, DEFAULT)
                 code = event.data.get(ATTR_CODE, DEFAULT)
                 miniserver.send_secure((device_uuid, value, code))
         except ValueError:
@@ -345,6 +335,12 @@ async def async_setup_entry(hass, config_entry):
 
     async def stop_loxone(event):
         await miniserver.stop()
+
+    for platform in ["scene"]:
+        _LOGGER.debug("starting loxone {}...".format(platform))
+        hass.async_create_task(
+            hass.config_entries.async_forward_entry_setup(config_entry, platform)
+        )
 
     miniserver.async_set_callback(message_callback)
     hass.bus.async_listen(SENDDOMAIN, send_to_loxone)

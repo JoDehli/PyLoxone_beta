@@ -11,11 +11,8 @@ from homeassistant.const import STATE_UNKNOWN
 
 from . import LoxoneEntity, get_miniserver_from_config_entry
 from .const import DOMAIN, SENDDOMAIN
-from .helpers import (
-    get_all_switch_entities,
-    get_cat_name_from_cat_uuid,
-    get_room_name_from_room_uuid,
-)
+from .helpers import (get_all_switch_entities, get_cat_name_from_cat_uuid,
+                      get_room_name_from_room_uuid)
 
 _LOGGER = logging.getLogger(__name__)
 

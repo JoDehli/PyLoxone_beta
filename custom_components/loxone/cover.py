@@ -8,41 +8,26 @@ https://github.com/JoDehli/PyLoxone
 import logging
 from typing import Any
 
-from homeassistant.components.cover import (
-    ATTR_POSITION,
-    ATTR_TILT_POSITION,
-    DEVICE_CLASS_AWNING,
-    DEVICE_CLASS_BLIND,
-    DEVICE_CLASS_CURTAIN,
-    DEVICE_CLASS_DOOR,
-    DEVICE_CLASS_GARAGE,
-    DEVICE_CLASS_SHUTTER,
-    DEVICE_CLASS_WINDOW,
-    SUPPORT_CLOSE,
-    SUPPORT_OPEN,
-    CoverEntity,
-)
+from homeassistant.components.cover import (ATTR_POSITION, ATTR_TILT_POSITION,
+                                            DEVICE_CLASS_AWNING,
+                                            DEVICE_CLASS_BLIND,
+                                            DEVICE_CLASS_CURTAIN,
+                                            DEVICE_CLASS_DOOR,
+                                            DEVICE_CLASS_GARAGE,
+                                            DEVICE_CLASS_SHUTTER,
+                                            DEVICE_CLASS_WINDOW, SUPPORT_CLOSE,
+                                            SUPPORT_OPEN, CoverEntity)
 from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import track_utc_time_change
 
 from . import LoxoneEntity, get_miniserver_from_config_entry
-from .const import (
-    DOMAIN,
-    SENDDOMAIN,
-    SUPPORT_CLOSE_TILT,
-    SUPPORT_OPEN_TILT,
-    SUPPORT_SET_POSITION,
-    SUPPORT_SET_TILT_POSITION,
-    SUPPORT_STOP,
-    SUPPORT_STOP_TILT,
-)
-from .helpers import (
-    get_all_covers,
-    get_cat_name_from_cat_uuid,
-    get_room_name_from_room_uuid,
-)
+from .const import (DOMAIN, SENDDOMAIN, SUPPORT_CLOSE_TILT, SUPPORT_OPEN_TILT,
+                    SUPPORT_SET_POSITION, SUPPORT_SET_TILT_POSITION,
+                    SUPPORT_STOP, SUPPORT_STOP_TILT)
+from .helpers import (get_all_covers, get_cat_name_from_cat_uuid,
+                      get_room_name_from_room_uuid)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -517,10 +502,6 @@ class LoxoneJalousie(LoxoneEntity, CoverEntity):
             "current_position": self.current_cover_position,
             "current_shade_mode": self.shade_postion_as_text,
             "current_position_loxone_style": round(self._position_loxone, 0),
-            "extra_data_template": [
-                "${attributes.current_position} % open",
-                "${attributes.current_shade_mode}",
-            ],
         }
 
         if self._is_automatic:
