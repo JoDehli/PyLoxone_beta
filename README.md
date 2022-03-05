@@ -1,5 +1,11 @@
 # PyLoxone Beta only for development
 
+# TODO
+- [ ] Test if it is stable over a long time. Is reconnecting successful?
+- [ ] Remove the numpy dependencies and interpolate with own function.
+- [ ] Remove the httpx dependency and use aiohttp only
+- [ ] Test if the gen2 is working
+
 ## Config for Dev
 
 ```yaml
