@@ -28,8 +28,10 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.discovery import async_load_platform
 from homeassistant.helpers.entity import Entity
 
+
+from pyloxone_api.miniserver import MiniServer
 from .helpers import get_miniserver_type
-from .pyloxone_api.miniserver import MiniServer
+
 
 # from .miniserver import MiniServer, get_miniserver_from_config_entry
 
