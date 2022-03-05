@@ -7,7 +7,6 @@
     "websockets",
     "pycryptodome",
     "numpy",
-    "requests_async",
     "httpx"
   ],
   "dependencies": [],
