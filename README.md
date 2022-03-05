@@ -5,6 +5,7 @@
 - [ ] Remove the numpy dependencies and interpolate with own function.
 - [ ] Remove the httpx dependency and use aiohttp only
 - [ ] Test if the gen2 is working
+- [ ] Documention with extra examples page where users can post there devices which are not supported.
 
 ## Config for Dev
 
