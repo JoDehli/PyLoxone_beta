@@ -22,13 +22,12 @@ from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import track_utc_time_change
 
-from . import LoxoneEntity
+from . import LoxoneEntity, get_miniserver_from_config_entry
 from .const import (DOMAIN, SENDDOMAIN, SUPPORT_CLOSE_TILT, SUPPORT_OPEN_TILT,
                     SUPPORT_SET_POSITION, SUPPORT_SET_TILT_POSITION,
                     SUPPORT_STOP, SUPPORT_STOP_TILT)
 from .helpers import (get_all_covers, get_cat_name_from_cat_uuid,
                       get_room_name_from_room_uuid)
-from .miniserver import get_miniserver_from_config_entry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,7 +42,7 @@ async def async_setup_platform(hass, config, async_add_devices, discovery_info={
 async def async_setup_entry(hass, config_entry, async_add_entites):
     """Set Loxone covers."""
     miniserver = get_miniserver_from_config_entry(hass, config_entry)
-    loxconfig = miniserver.api.json
+    loxconfig = miniserver.loxone_config
     covers = []
 
     for cover in get_all_covers(loxconfig):
@@ -69,11 +68,11 @@ async def async_setup_entry(hass, config_entry, async_add_entites):
     def async_add_covers(_):
         async_add_entites(_)
 
-    miniserver.listeners.append(
-        async_dispatcher_connect(
-            hass, miniserver.async_signal_new_device(NEW_COVERS), async_add_entites
-        )
-    )
+    # miniserver.listeners.append(
+    #     async_dispatcher_connect(
+    #         hass, miniserver.async_signal_new_device(NEW_COVERS), async_add_entites
+    #     )
+    # )
     async_add_entites(covers)
 
 
@@ -185,7 +184,7 @@ class LoxoneGate(LoxoneEntity, CoverEntity):
             self.schedule_update_ha_state()
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes.
 
         Implemented by platform classes.
@@ -194,7 +193,7 @@ class LoxoneGate(LoxoneEntity, CoverEntity):
             "uuid": self.uuidAction,
             "device_typ": self.type,
             "category": self.cat,
-            "plattform": "loxone",
+            "platform": "loxone",
         }
 
     @property
@@ -243,7 +242,7 @@ class LoxoneWindow(LoxoneEntity, CoverEntity):
         return self._position
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """
         Return device specific state attributes.
         Implemented by platform classes.
@@ -251,7 +250,7 @@ class LoxoneWindow(LoxoneEntity, CoverEntity):
         device_att = {
             "uuid": self.uuidAction,
             "device_typ": self.type,
-            "plattform": "loxone",
+            "platform": "loxone",
             "room": self.room,
             "category": self.cat,
         }
@@ -489,7 +488,7 @@ class LoxoneJalousie(LoxoneEntity, CoverEntity):
             return " "
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """
         Return device specific state attributes.
         Implemented by platform classes.
@@ -497,16 +496,12 @@ class LoxoneJalousie(LoxoneEntity, CoverEntity):
         device_att = {
             "uuid": self.uuidAction,
             "device_typ": self.type,
-            "plattform": "loxone",
+            "platform": "loxone",
             "room": self.room,
             "category": self.cat,
             "current_position": self.current_cover_position,
             "current_shade_mode": self.shade_postion_as_text,
             "current_position_loxone_style": round(self._position_loxone, 0),
-            "extra_data_template": [
-                "${attributes.current_position} % open",
-                "${attributes.current_shade_mode}",
-            ],
         }
 
         if self._is_automatic:

@@ -13,11 +13,10 @@ from homeassistant.const import (CONF_CODE, CONF_NAME, CONF_PASSWORD,
                                  STATE_ALARM_ARMED_HOME, STATE_ALARM_ARMING,
                                  STATE_ALARM_DISARMED, STATE_ALARM_TRIGGERED)
 
-from . import LoxoneEntity
+from . import LoxoneEntity, get_miniserver_from_config_entry
 from .const import DOMAIN, EVENT, SECUREDSENDDOMAIN, SENDDOMAIN
 from .helpers import (get_all_alarm, get_cat_name_from_cat_uuid,
                       get_room_name_from_room_uuid)
-from .miniserver import get_miniserver_from_config_entry
 
 DEFAULT_NAME = "Loxone Alarm"
 DEFAULT_FORCE_UPDATE = False
@@ -42,7 +41,7 @@ async def async_setup_platform(hass, config, async_add_devices, discovery_info=N
 async def async_setup_entry(hass, config_entry, async_add_devices):
     """Set up Loxone Alarms."""
     miniserver = get_miniserver_from_config_entry(hass, config_entry)
-    loxconfig = miniserver.api.json
+    loxconfig = miniserver.loxone_config
     devices = []
     for loxone_alarm in get_all_alarm(loxconfig):
         loxone_alarm.update(
@@ -237,7 +236,7 @@ class LoxoneAlarm(LoxoneEntity, AlarmControlPanelEntity):
         return STATE_ALARM_DISARMED
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return the state attributes."""
         return {
             "uuid": self.uuidAction,
@@ -247,7 +246,7 @@ class LoxoneAlarm(LoxoneEntity, AlarmControlPanelEntity):
             "level": self._level,
             "armed_delay": self._armed_delay,
             "armed_delay_total_delay": self._armed_delay_total_delay,
-            "plattform": "loxone",
+            "platform": "loxone",
         }
 
     def _validate_code(self, code):

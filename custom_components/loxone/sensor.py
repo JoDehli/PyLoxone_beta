@@ -8,24 +8,25 @@ import logging
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity
+from homeassistant.components.sensor import (PLATFORM_SCHEMA, SensorEntity,
+                                             SensorStateClass)
 from homeassistant.const import (CONF_DEVICE_CLASS, CONF_NAME,
                                  CONF_UNIT_OF_MEASUREMENT, CONF_VALUE_TEMPLATE,
                                  STATE_OFF, STATE_ON, STATE_UNKNOWN)
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from . import LoxoneEntity
+from . import LoxoneEntity, get_miniserver_from_config_entry
 from .const import CONF_ACTIONID, DOMAIN, SENDDOMAIN
 from .helpers import (get_all, get_all_analog_info, get_all_digital_info,
                       get_cat_name_from_cat_uuid, get_room_name_from_room_uuid)
-from .miniserver import get_miniserver_from_config_entry
 
 NEW_SENSOR = "sensors"
 
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_NAME = "Loxone Sensor"
+CONF_STATE_CLASS = "state_class"
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
@@ -33,6 +34,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_NAME): cv.string,
         vol.Optional(CONF_UNIT_OF_MEASUREMENT): cv.string,
         vol.Optional(CONF_DEVICE_CLASS): cv.string,
+        vol.Optional(CONF_STATE_CLASS): cv.string,
     }
 )
 
@@ -57,7 +59,7 @@ async def async_setup_platform(
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up entry."""
     miniserver = get_miniserver_from_config_entry(hass, config_entry)
-    loxconfig = miniserver.api.json
+    loxconfig = miniserver.loxone_config
     sensors = []
     if "softwareVersion" in loxconfig:
         sensors.append(LoxoneVersionSensor(loxconfig["softwareVersion"]))
@@ -97,11 +99,11 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     def async_add_sensors(_):
         async_add_entities(_, True)
 
-    miniserver.listeners.append(
-        async_dispatcher_connect(
-            hass, miniserver.async_signal_new_device(NEW_SENSOR), async_add_sensors
-        )
-    )
+    # miniserver.listeners.append(
+    #     async_dispatcher_connect(
+    #         hass, miniserver.async_signal_new_device(NEW_SENSOR), async_add_sensors
+    #     )
+    # )
 
     async_add_entities(sensors)
 
@@ -122,6 +124,11 @@ class LoxoneCustomSensor(LoxoneEntity, SensorEntity):
             self._device_class = kwargs["device_class"]
         else:
             self._device_class = None
+
+        if "state_class" in kwargs:
+            self._state_class = kwargs["state_class"]
+        else:
+            self._state_class = None
 
         self._state = STATE_UNKNOWN
 
@@ -156,20 +163,24 @@ class LoxoneCustomSensor(LoxoneEntity, SensorEntity):
         return self._unit_of_measurement
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes.
 
         Implemented by platform classes.
         """
         return {
             "uuid": self.uuidAction,
-            "plattform": "loxone",
+            "platform": "loxone",
         }
 
     @property
     def device_class(self):
         """Return the class of this device, from component DEVICE_CLASSES."""
         return self._device_class
+
+    @property
+    def state_class(self):
+        return self._state_class
 
 
 class LoxoneVersionSensor(LoxoneEntity, SensorEntity):
@@ -233,7 +244,7 @@ class LoxoneTextSensor(LoxoneEntity, SensorEntity):
         self.async_schedule_update_ha_state()
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes.
 
         Implemented by platform classes.
@@ -241,7 +252,7 @@ class LoxoneTextSensor(LoxoneEntity, SensorEntity):
         return {
             "uuid": self.uuidAction,
             "device_typ": self.type,
-            "plattform": "loxone",
+            "platform": "loxone",
             "category": self.cat,
         }
 
@@ -275,9 +286,9 @@ class Loxonesensor(LoxoneEntity, SensorEntity):
 
     def extract_attributes(self):
         """Extract certain Attributes. Not all."""
-        if "text" in self.details:
-            self._on_state = self.details["text"]["on"]
-            self._off_state = self.details["text"]["off"]
+        # if "text" in self.details:
+        #     self._on_state = self.details["text"]["on"]
+        #     self._off_state = self.details["text"]["off"]
         if "format" in self.details:
             self._format = self._get_format(self.details["format"])
             self._unit_of_measurement = self._clean_unit(self.details["format"])
@@ -319,7 +330,7 @@ class Loxonesensor(LoxoneEntity, SensorEntity):
             return "mdi:chart-bell-curve"
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes.
 
         Implemented by platform classes.
@@ -327,7 +338,7 @@ class Loxonesensor(LoxoneEntity, SensorEntity):
         return {
             "uuid": self.uuidAction,
             "device_typ": self.typ + "_sensor",
-            "plattform": "loxone",
+            "platform": "loxone",
             "category": self.cat,
         }
 

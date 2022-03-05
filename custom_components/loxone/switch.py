@@ -9,11 +9,10 @@ import logging
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import STATE_UNKNOWN
 
-from . import LoxoneEntity
+from . import LoxoneEntity, get_miniserver_from_config_entry
 from .const import DOMAIN, SENDDOMAIN
 from .helpers import (get_all_switch_entities, get_cat_name_from_cat_uuid,
                       get_room_name_from_room_uuid)
-from .miniserver import get_miniserver_from_config_entry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,7 +20,7 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up entry."""
     miniserver = get_miniserver_from_config_entry(hass, config_entry)
-    loxconfig = miniserver.api.json
+    loxconfig = miniserver.loxone_config
     entites = []
 
     for switch_entity in get_all_switch_entities(loxconfig):
@@ -161,7 +160,7 @@ class LoxoneTimedSwitch(LoxoneEntity, SwitchEntity):
             self.async_schedule_update_ha_state()
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes.
 
         Implemented by platform classes.
@@ -171,7 +170,7 @@ class LoxoneTimedSwitch(LoxoneEntity, SwitchEntity):
             "room": self.room,
             "category": self.cat,
             "device_typ": self.type,
-            "plattform": "loxone",
+            "platform": "loxone",
         }
 
         if self._state == 0.0:
@@ -262,7 +261,7 @@ class LoxoneSwitch(LoxoneEntity, SwitchEntity):
             self.async_schedule_update_ha_state()
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes.
 
         Implemented by platform classes.
@@ -273,7 +272,7 @@ class LoxoneSwitch(LoxoneEntity, SwitchEntity):
             "room": self.room,
             "category": self.cat,
             "device_typ": self.type,
-            "plattform": "loxone",
+            "platform": "loxone",
         }
 
     @property
@@ -298,7 +297,7 @@ class LoxoneIntercomSubControl(LoxoneSwitch):
         self.schedule_update_ha_state()
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes.
 
         Implemented by platform classes.
@@ -309,7 +308,7 @@ class LoxoneIntercomSubControl(LoxoneSwitch):
             "room": self.room,
             "category": self.cat,
             "device_typ": self.type,
-            "plattform": "loxone",
+            "platform": "loxone",
         }
 
     @property

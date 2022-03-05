@@ -12,7 +12,7 @@ import asyncio
 import logging
 import sys
 
-from . import LoxAPI
+from miniserver import MiniServer
 
 _LOGGER = logging.getLogger("pyloxone_api")
 _LOGGER.setLevel(logging.DEBUG)
@@ -27,7 +27,7 @@ _LOGGER.addHandler(logging.StreamHandler())
 
 async def main() -> None:
 
-    api = LoxAPI(
+    api = MiniServer(
         user=sys.argv[1], password=sys.argv[2], host=sys.argv[3], port=int(sys.argv[4])
     )
 
