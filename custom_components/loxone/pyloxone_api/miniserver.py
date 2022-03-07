@@ -221,6 +221,13 @@ class MiniServer:
             self._pending.append(running_task)
         _LOGGER.debug("Finished connect")
 
+    @property
+    def miniserver_type(self):
+        try:
+            return self.json["msInfo"]["miniserverType"]
+        except:
+            return None
+
     def async_session_handler(self, state):
         _LOGGER.debug("async_session_handler")
         _LOGGER.debug("state: {0}".format(state))
