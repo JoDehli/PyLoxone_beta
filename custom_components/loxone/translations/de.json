@@ -8,10 +8,8 @@
                 "title": "Loxone",
                 "description": "Loxone Konfiguration",
                 "data": {
-                    "host": "Host",
+                    "url": "Miniser webadresse",
                     "username": "Benutzer",
-                    "port": "Port",
-                    "host": "Miniserver Ip",
                     "password": "Password",
                     "generate_scenes": "Scenen generieren",
                     "generate_lightcontroller_subcontrols": "Subcontrols für LightcontrollerV2 erzeugen",

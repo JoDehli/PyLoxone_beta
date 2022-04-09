@@ -3,7 +3,7 @@ A quick test of the pyloxone_api module
 
 From the command line, run:
 
-> python -m pyloxone_api username password host port
+> python -m pyloxone_api username password url
 
 where username, password host and port are your Loxone login credentials
 
@@ -17,6 +17,8 @@ from miniserver import MiniServer
 _LOGGER = logging.getLogger("pyloxone_api")
 _LOGGER.setLevel(logging.DEBUG)
 _LOGGER.addHandler(logging.StreamHandler())
+
+
 # If you want to see what is going on at the websocket level, uncomment the following
 # lines
 
@@ -26,14 +28,14 @@ _LOGGER.addHandler(logging.StreamHandler())
 
 
 async def main() -> None:
-
     api = MiniServer(
-        user=sys.argv[1], password=sys.argv[2], host=sys.argv[3], port=int(sys.argv[4])
+        username=sys.argv[1], password=sys.argv[2], url=sys.argv[3]
     )
 
-    await api.getJson()
-    await api.async_init()
-    await api.start()
+    await api.async_setup()
+    print(api.json)
+    await api.connect(asyncio.get_event_loop(), None)
+    await api.stop()
 
 
 if __name__ == "__main__":
