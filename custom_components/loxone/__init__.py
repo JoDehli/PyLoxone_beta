@@ -12,7 +12,7 @@ import traceback
 
 import homeassistant.components.group as group
 import voluptuous as vol
-from homeassistant.const import (CONF_HOST, CONF_PASSWORD, CONF_PORT,
+from homeassistant.const import (CONF_PASSWORD, CONF_URL,
                                  CONF_USERNAME, EVENT_COMPONENT_LOADED,
                                  EVENT_HOMEASSISTANT_START,
                                  EVENT_HOMEASSISTANT_STOP)
@@ -46,8 +46,7 @@ CONFIG_SCHEMA = vol.Schema(
             {
                 vol.Required(CONF_USERNAME): cv.string,
                 vol.Required(CONF_PASSWORD): cv.string,
-                vol.Required(CONF_HOST): cv.string,
-                vol.Optional(CONF_PORT, default=DEFAULT_PORT): cv.port,
+                vol.Required(CONF_URL): cv.string,
                 vol.Optional(CONF_SCENE_GEN, default=True): cv.boolean,
                 vol.Optional(
                     CONF_SCENE_GEN_DELAY, default=DEFAULT_DELAY_SCENE
@@ -71,10 +70,12 @@ def get_miniserver_from_config_entry(hass, config_entry) -> MiniServer:
     """Return Miniserver with a matching bridge id."""
     return hass.data[DOMAIN][config_entry.entry_id]
 
+
 @callback
 def get_miniserver_from_hass(hass):
     """Return Miniserver with a matching bridge id."""
     return hass.data[DOMAIN][list(hass.data[DOMAIN].keys())[0]]
+
 
 @callback
 def get_miniserver_from_config(hass, config):
@@ -113,14 +114,26 @@ async def async_migrate_entry(hass, config_entry):
         config_entry.options = {**new}
         config_entry.version = 3
         _LOGGER.info("Migration to version %s successful", 3)
+
+    if config_entry.version == 3:
+        host = config_entry.options.get("host")
+        port = config_entry.options.get("port")
+        url = f"http://{host}"
+        if port != "":
+            url += f":{port}"
+        new = {**config_entry.options, CONF_URL: url}
+        new.pop("host")
+        new.pop("port")
+        config_entry.options = {**new}
+        config_entry.version = 4
+        _LOGGER.info("Migration to version %s successful", 4)
     return True
 
 
 async def async_set_options(hass, config_entry):
     data = {**config_entry.data}
     options = {
-        CONF_HOST: data.pop(CONF_HOST, ""),
-        CONF_PORT: data.pop(CONF_PORT, DEFAULT_PORT),
+        CONF_URL: data.pop(CONF_URL, DEFAULT_PORT),
         CONF_USERNAME: data.pop(CONF_USERNAME, ""),
         CONF_PASSWORD: data.pop(CONF_PASSWORD, ""),
         CONF_SCENE_GEN: data.pop(CONF_SCENE_GEN, ""),
@@ -163,14 +176,13 @@ async def async_setup_entry(hass, config_entry):
         await async_set_options(hass, config_entry)
 
     miniserver = MiniServer(
-        host=config_entry.options.get("host"),
-        port=config_entry.options.get("port"),
+        url=config_entry.options.get("url"),
         username=config_entry.options.get("username"),
         password=config_entry.options.get("password"),
     )
-    setup_succeded = await miniserver.async_setup()
+    setup_succeeded = await miniserver.async_setup()
 
-    if not setup_succeded:
+    if not setup_succeeded:
         return False
 
     connection_status = None
@@ -259,22 +271,24 @@ async def async_setup_entry(hass, config_entry):
                     lights.sort()
                     climates.sort()
 
-                    await create_group_for_loxone_enties(hass, sensors_analog, "Loxone Analog Sensors","loxone_analog")
-                    await create_group_for_loxone_enties(hass, sensors_digital, "Loxone Digital Sensors", "loxone_digital")
+                    await create_group_for_loxone_enties(hass, sensors_analog, "Loxone Analog Sensors", "loxone_analog")
+                    await create_group_for_loxone_enties(hass, sensors_digital, "Loxone Digital Sensors",
+                                                         "loxone_digital")
                     await create_group_for_loxone_enties(hass, switches, "Loxone Switches", "loxone_switches")
                     await create_group_for_loxone_enties(hass, covers, "Loxone Covers", "loxone_covers")
                     await create_group_for_loxone_enties(hass, lights, "Loxone Lights", "loxone_lights")
                     await create_group_for_loxone_enties(hass, climates, "Loxone Room Controllers", "loxone_climates")
                     await hass.async_block_till_done()
                     await create_group_for_loxone_enties(hass, [
-                            "group.loxone_analog",
-                            "group.loxone_digital",
-                            "group.loxone_switches",
-                            "group.loxone_covers",
-                            "group.loxone_lights",
-                        ], "Loxone Group", "loxone_group")
+                        "group.loxone_analog",
+                        "group.loxone_digital",
+                        "group.loxone_switches",
+                        "group.loxone_covers",
+                        "group.loxone_lights",
+                    ], "Loxone Group", "loxone_group")
                 except Exception as err:
                     _LOGGER.error("Error Group generation: %s", err)
+
     # hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, miniserver.stop_loxone)
     # hass.bus.async_listen_once(EVENT_COMPONENT_LOADED, loxone_discovered)
 

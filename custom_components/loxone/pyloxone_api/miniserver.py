@@ -10,6 +10,7 @@ import traceback
 import urllib.parse
 from base64 import b64decode, b64encode
 from collections import namedtuple
+from typing import Optional
 
 import httpx
 from Crypto.Cipher import AES, PKCS1_v1_5
@@ -62,18 +63,19 @@ from .wsclient import STATE_RUNNING, WSClient
 
 _LOGGER = logging.getLogger(__name__)
 
+_LOXONE_ALLOWED_STATUS_CODES = {200, 307}
+
 
 async def raise_if_not_200(response: httpx.Response) -> None:
     """An httpx event hook, to ensure that http responses other than 200
     raise an exception"""
-    # Loxone response codes are a bit odd. It is not clear whether a response which
-    # is not 200 is ever OK (eg it is unclear whether redirect response are issued).
+    # Loxone response codes are a bit odd.only 200 and 307 (from dns) are ok
     # json responses also have a "Code" key, but it is unclear whether this is ever
     # different from the http response code. At the moment, we ignore it.
     #
-    # And there are references to non-standard codes in the docs (eg a 900 error).
-    # At present, treat any non-200 code as an exception.
-    if response.status_code != 200:
+    # And there are references to non-standard codes in the docs (eg a 901 error).
+    # At present, treat any non-200 or non redirect code as an exception.
+    if response.status_code not in _LOXONE_ALLOWED_STATUS_CODES:
         if response.is_stream_consumed:
             raise LoxoneHTTPStatusError(
                 f"Code {response.status_code}. Miniserver response was {response.text}"
@@ -90,7 +92,6 @@ def get_public_key(public_key):
     except ValueError as exc:
         _LOGGER.error(f"Error creating RSA cipher: {exc}")
         raise LoxoneException(exc)
-    return False
 
 
 Salt = namedtuple("Salt", ["value", "is_new", "previous"])
@@ -100,15 +101,15 @@ class _SaltMine:
     """A salt used for encrypting commands."""
 
     def __init__(self):
-        self._salt: str = None
+        self._salt: Optional[str] = None
         self._generate_new_salt()
+        self._is_new: bool = True
+        self._previous = self._salt
 
     def _generate_new_salt(self) -> None:
-        self._previous = self._salt
         self._salt = get_random_bytes(SALT_BYTES).hex()
         self._timestamp = time.time()
         self._used_count: int = 0
-        self._is_new: bool = True
         _LOGGER.debug("Generating a new salt")
 
     def get_salt(self) -> Salt:
@@ -122,8 +123,8 @@ class _SaltMine:
         self._used_count += 1
         self._is_new = False
         if (
-            self._used_count > SALT_MAX_USE_COUNT
-            or time.time() - self._timestamp > SALT_MAX_AGE_SECONDS
+                self._used_count > SALT_MAX_USE_COUNT
+                or time.time() - self._timestamp > SALT_MAX_AGE_SECONDS
         ):
             # the salt has expired. Get a new one.
             self._previous = self._salt
@@ -143,27 +144,24 @@ class MiniServer:
     """This class connects to the Loxone Miniserver."""
 
     def __init__(
-        self,
-        host=None,
-        port=None,
-        username=None,
-        password=None,
+            self,
+            url: str,
+            username: str = None,
+            password: str = None,
     ):
         """Initialize Miniserver class."""
-        self._host: str = host
-        self._port: int = port
+        self.url = url.rstrip("/")
         self._username: str = username
         self._password: str = password
 
-        self._use_tls = False
         self._https_status = None
         self._tls_check_hostname: bool = True
         self._local = None
         self._iv = get_random_bytes(IV_BYTES)
         self._key = get_random_bytes(AES_KEY_SIZE)
-        self._public_key: str = None
+        self._public_key: Optional[str] = None
         self._session_key = None
-        self._saltmine = _SaltMine()
+        self._salt_mine = _SaltMine()
         self._current_key_and_salt = None
         self._token = None
         self._token_hash = None
@@ -172,7 +170,7 @@ class MiniServer:
         self.message_header = None
         self.message_call_back = None
 
-        self.json = None
+        self.json: Optional[dict] = None
         self.snr: str = ""
 
         self.ready = asyncio.Event()
@@ -183,7 +181,7 @@ class MiniServer:
             None  # None = no TLS, 1 = TLS available, 2 = cert expired
         )
         self.loop = None
-        self.wsclient: WSClient = None
+        self.wsclient: Optional[WSClient] = None
         self.async_connection_status_callback = None
         self._pending = []
         self._get_key_queue = queue.Queue(maxsize=20)
@@ -196,7 +194,7 @@ class MiniServer:
     def async_set_callback(self, message_callback):
         self.message_call_back = message_callback
 
-    async def stop(self):
+    async def stop(self):  # maybe this can be a asynchronous context manager (with connecct being __aenter)
         await self.wsclient.stop()
         for task in self._pending:
             task.cancel()
@@ -208,11 +206,9 @@ class MiniServer:
 
         self.wsclient = WSClient(
             self.loop,
-            self._host,
-            self._port,
+            self.url,
             self._username,
             self._password,
-            self._use_tls,
             self.async_session_handler,
             self.async_message_handler,
         )
@@ -251,7 +247,7 @@ class MiniServer:
     def _encrypt(self, command: str) -> str:
         # if not self._encryption_ready:
         #     return command
-        salt = self._saltmine.get_salt()
+        salt = self._salt_mine.get_salt()
         if salt.is_new:
             s = f"nextSalt/{salt.previous}/{salt.value}/{command}\x00"
         else:
@@ -279,6 +275,7 @@ class MiniServer:
             pwd_hash = m.hexdigest().upper()
             pwd_hash = f"{self._username}:{pwd_hash}"
 
+            # # Todo this is here repeated multiple times (and only hash alg changes).. abstract it
             if key_salt.hash_alg == "SHA1":
                 digester = HMAC.new(
                     bytes.fromhex(key_salt.key), pwd_hash.encode("utf-8"), SHA1
@@ -287,6 +284,8 @@ class MiniServer:
                 digester = HMAC.new(
                     bytes.fromhex(key_salt.key), pwd_hash.encode("utf-8"), SHA256
                 )
+            else:
+                raise LoxoneException("unknown SHA ALG")
             _LOGGER.debug("hash_credentials successfully...")
             return digester.hexdigest()
         except ValueError:
@@ -306,6 +305,8 @@ class MiniServer:
                 self._token.token.encode("utf-8"),
                 SHA256,
             )
+        else:
+            raise LoxoneException("unknown SHA ALG")
         return digester.hexdigest()
 
     def _decrypt(self, command: str) -> bytes:
@@ -316,7 +317,7 @@ class MiniServer:
         # if they were when sent to the miniserver )
         remove_text = "jdev/sys/enc/"
         enc_text = (
-            command[len(remove_text) :] if command.startswith(remove_text) else command
+            command[len(remove_text):] if command.startswith(remove_text) else command
         )
         decoded = b64decode(enc_text)
         aes_cipher = AES.new(self._key, AES.MODE_CBC, self._iv)
@@ -395,9 +396,11 @@ class MiniServer:
                                     self.wsclient.send(f"{CMD_GET_KEY}")
                         except:
                             traceback.print_exc()
+                            # maybe put this as _logger.exception?
+                            _LOGGER.debug("msg handler failiure", exc_info=True)
 
             elif isinstance(mess_obj, TextMessage) and (
-                "gettoken" in mess_obj.message or "getjwt" in mess_obj.message
+                    "gettoken" in mess_obj.message or "getjwt" in mess_obj.message
             ):
                 _LOGGER.debug("Process gettoken response")
                 response = LLResponse(mess_obj.message)
@@ -410,7 +413,7 @@ class MiniServer:
                 self.wsclient.send(self._encrypt(f"{CMD_ENABLE_UPDATES}"))
 
             elif isinstance(mess_obj, TextMessage) and (
-                "refreshtoken" in mess_obj.message or "refreshjwt" in mess_obj.message
+                    "refreshtoken" in mess_obj.message or "refreshjwt" in mess_obj.message
             ):
                 _LOGGER.debug("Process refreshtoken response")
                 response = LLResponse(mess_obj.message)
@@ -421,8 +424,8 @@ class MiniServer:
                     _LOGGER.debug("Token saved.")
 
             elif (
-                isinstance(mess_obj, TextMessage)
-                and "authwithtoken" in mess_obj.message
+                    isinstance(mess_obj, TextMessage)
+                    and "authwithtoken" in mess_obj.message
             ):
                 if mess_obj.code == 200:
                     _LOGGER.debug("Authentification with token successfully")
@@ -440,8 +443,8 @@ class MiniServer:
                     )
                     self._token.delete()
             elif (
-                isinstance(mess_obj, TextMessage)
-                and "enablebinstatusupdate" in mess_obj.message
+                    isinstance(mess_obj, TextMessage)
+                    and "enablebinstatusupdate" in mess_obj.message
             ):
                 _LOGGER.debug("Process enablebinstatusupdate response")
 
@@ -458,7 +461,7 @@ class MiniServer:
                     self.add_async_command_with_get_key(self._refresh())
 
             elif (
-                isinstance(mess_obj, TextMessage) and "getvisusalt" in mess_obj.message
+                    isinstance(mess_obj, TextMessage) and "getvisusalt" in mess_obj.message
             ):
                 if mess_obj.code == 200:
                     mess_obj_dict = mess_obj.value_as_dict
@@ -489,20 +492,22 @@ class MiniServer:
                                 pwd_hash.encode("utf-8"),
                                 SHA256,
                             )
+                        else:
+                            raise LoxoneException("unknown SHA ALG")
                         command = "jdev/sps/ios/{}/{}/{}".format(
                             digester.hexdigest(), device_uuid, value
                         )
                         self.wsclient.send(command)
 
             elif (
-                isinstance(mess_obj, TextMessage) and "dev/sps/io/" in mess_obj.message
+                    isinstance(mess_obj, TextMessage) and "dev/sps/io/" in mess_obj.message
             ):
                 _LOGGER.debug("Process io response")
                 if self.message_call_back:
                     await self.message_call_back(mess_obj.message)
 
             elif (
-                isinstance(mess_obj, TextMessage) and "dev/sps/ios/" in mess_obj.message
+                    isinstance(mess_obj, TextMessage) and "dev/sps/ios/" in mess_obj.message
             ):
                 _LOGGER.debug("Process ios response")
                 if self.message_call_back:
@@ -524,6 +529,7 @@ class MiniServer:
 
             elif isinstance(mess_obj, DaytimerStatesTable):
                 _LOGGER.debug("Got DaytimerStatesTable")
+                # Todo implement this
 
             else:
                 _LOGGER.debug("Process <UNKNOWN> response")
@@ -542,74 +548,64 @@ class MiniServer:
             self.wsclient.send(enc_command)
 
     async def _get_json(self) -> bool:
-        """Obtain basic info from the miniserver"""
+        """Obtain basic info from the miniserver
+        this method is unsafe if multiple async call are being made
+        """
         # All initial http/https requests are carried out here, for simplicity. They
         # can all use the same httpx.AsyncClient instance. Any non-200 response from
         # the miniserver will cause an exception to be raised, via the event_hook
-        scheme = "https" if self._use_tls else "http"
         auth = None
-
-        if self._port == "80":
-            _base_url = f"{scheme}://{self._host}"
-        else:
-            _base_url = f"{scheme}://{self._host}:{self._port}"
-
         if self._username is not None and self._password is not None:
             auth = (self._username, self._password)
 
-        client = httpx.AsyncClient(
-            auth=auth,
-            base_url=_base_url,
-            verify=self._tls_check_hostname,
-            timeout=TIMEOUT,
-            event_hooks={"response": [raise_if_not_200]},
-        )
-
         try:
-            api_resp = await client.get("/jdev/cfg/apiKey")
-            value = LLResponse(api_resp.text).value
-            # The json returned by the miniserver is invalid. It contains " and '.
-            # We need to normalise it
-            value = json.loads(value.replace("'", '"'))
-            self._https_status = value.get("httpsStatus")
-            self.version = value.get("version")
-            self._version = (
-                [int(x) for x in self.version.split(".")] if self.version else []
-            )
-            self.snr = value.get("snr")
-            self._local = value.get("local", True)
-            if not self._local:
-                _base_url = str(api_resp.url).replace("/jdev/cfg/apiKey", "")
-                client = httpx.AsyncClient(
+            async with httpx.AsyncClient(
                     auth=auth,
-                    base_url=_base_url,
+                    base_url=self.url,
                     verify=self._tls_check_hostname,
                     timeout=TIMEOUT,
                     event_hooks={"response": [raise_if_not_200]},
+            ) as client:  # use only one client managed with context manager and change base url if needed
+                # sniff DNS (internally you should not get 307 unless you are being redirected)
+                api_resp: httpx.Response = await client.get("")  # get base page to check if we are getting redirected
+                if api_resp.status_code == 307:  # redirected. change url
+                    self.url = str(api_resp.next_request.url).rstrip("/")
+                    client.base_url = self.url
+                api_resp = await client.get("/jdev/cfg/apiKey")
+                value = LLResponse(api_resp.text).value
+                # The json returned by the miniserver is invalid. It contains " and '.
+                # We need to normalise it
+                value = json.loads(value.replace("'", '"'))
+                self._https_status = value.get("httpsStatus")
+                self.version = value.get("version")
+                self._version = (
+                    [int(x) for x in self.version.split(".")] if self.version else []
                 )
+                self.snr = value.get("snr")
+                self._local = value.get("local", True)
 
-            # Get the structure file
-            loxappdata = await client.get(LOXAPPPATH)
-            status = loxappdata.status_code
-            if status == 200:
-                self.json = loxappdata.json()
-                self.json[
-                    "softwareVersion"
-                ] = self._version  # FIXME Legacy use only. Need to fix pyloxone
-            else:
-                return False
-            # Get the public key
-            pk_data = await client.get(CMD_GET_PUBLIC_KEY)
-            pk = LLResponse(pk_data.text).value
-            # Loxone returns a certificate instead of a key, and the certificate is not
-            # properly PEM encoded because it does not contain newlines before/after the
-            # boundaries. We need to fix both problems. Proper PEM encoding requires 64
-            # char line lengths throughout, but Python does not seem to insist on this.
-            # If, for some reason, no certificate is returned, _public_key will be an
-            # empty string.
-            self._public_key = pk.replace(
-                "-----BEGIN CERTIFICATE-----", "-----BEGIN PUBLIC KEY-----\n"
-            ).replace("-----END CERTIFICATE-----", "\n-----END PUBLIC KEY-----\n")
+                # Get the structure file
+                loxappdata = await client.get(LOXAPPPATH)
+                status = loxappdata.status_code
+                if status == 200:
+                    self.json = loxappdata.json()
+                    self.json[
+                        "softwareVersion"
+                    ] = self._version  # FIXME Legacy use only. Need to fix pyloxone
+                else:
+                    return False
+                # Get the public key
+                pk_data = await client.get(CMD_GET_PUBLIC_KEY)
+                pk = LLResponse(pk_data.text).value
+                # Loxone returns a certificate instead of a key, and the certificate is not
+                # properly PEM encoded because it does not contain newlines before/after the
+                # boundaries. We need to fix both problems. Proper PEM encoding requires 64
+                # char line lengths throughout, but Python does not seem to insist on this.
+                # If, for some reason, no certificate is returned, _public_key will be an
+                # empty string.
+                self._public_key = pk.replace(
+                    "-----BEGIN CERTIFICATE-----", "-----BEGIN PUBLIC KEY-----\n"
+                ).replace("-----END CERTIFICATE-----", "\n-----END PUBLIC KEY-----\n")
 
         # Handle errors. An http error getting any of the required data is
         # probably fatal, so log it and raise it for handling elsewhere. Other errors
@@ -624,11 +620,14 @@ class MiniServer:
             _LOGGER.error(exc)
             raise LoxoneHTTPStatusError(exc) from None
         except Exception:
+            _LOGGER.debug("During getting json something went wrong", exc_info=True)
             traceback.print_exc()
         finally:
-            # Async httpx client must always be closed
-            await client.aclose()
             if self.json:
+                # this is only getting serialized when debug level is set
+                _LOGGER.debug("successfully downloaded following "
+                              "structure file (%s%s)\n========================\n%s\n========================",
+                              self.url, LOXAPPPATH, self.json)
                 return True
             else:
                 return False
@@ -667,7 +666,7 @@ class MiniServer:
                 self.wsclient.send(CMD_KEEP_ALIVE)
                 count += 1
                 if (
-                    count >= THROTTLE_CHECK_TOKEN_STILL_VALID
+                        count >= THROTTLE_CHECK_TOKEN_STILL_VALID
                 ):  # Throttle the check_still_valid
                     _LOGGER.debug("Check if token still valid.")
                     self.add_async_command_with_get_key(self._check_token_command())

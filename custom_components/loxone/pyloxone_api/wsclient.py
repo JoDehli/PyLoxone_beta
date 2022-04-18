@@ -1,9 +1,7 @@
 """Represent the client session."""
 
-import asyncio
-import binascii
-import datetime
 import logging
+import re
 
 import aiohttp
 
@@ -17,39 +15,42 @@ CONNECTING = "connecting"
 RETRY_TIMER = 20
 RETRY_COUTNER = 5
 
+_PROTOCOL_STRIP = re.compile("^[^:]+://", re.IGNORECASE)
+
+
+# _HTTPS_IDENTIFY = re.compile("^https://", re.IGNORECASE)
+
 
 class WSClient:
     """This class client."""
 
     def __init__(
-        self,
-        loop,
-        host,
-        port,
-        username,
-        password,
-        use_tls,
-        async_session_callback,
-        async_message_callback,
+            self,
+            loop,
+            url: str,
+            username: str,
+            password: str,
+            async_session_callback,
+            async_message_callback,
     ):
         """init"""
         _LOGGER.debug("__init__")
         self.loop = loop
         self.session = None
         self.ws = None
-        self.host = host
-        self.port = port
+        # TODO THIS DOES NOT WORK FOR WSS (IT MAY NOT KNOW CERTIFICATE -> solve this somehow)
+        # tls = _HTTPS_IDENTIFY.match(url) is not None
+        #  ("wss" if tls else "ws")
+        self.url = "ws://" + _PROTOCOL_STRIP.sub("", url) + "/ws/rfc6455"
         self.username = username
         self.password = password
         self._state = None
-        self._use_tls = use_tls
         self._reconnect_counter = 0
 
         self.async_session_handler_callback = async_session_callback
         self.async_message_handler_callback = async_message_callback
 
-        _LOGGER.debug("  self.host: {0}".format(self.host))
-        _LOGGER.debug("  self.port: {0}".format(self.port))
+        _LOGGER.debug("  self.url: %s", self.url)
 
     @property
     def state(self):
@@ -76,13 +77,9 @@ class WSClient:
         """Start websocket connection."""
         _LOGGER.debug("running")
 
-        scheme = "wss" if self._use_tls else "ws"
-        url = f"{scheme}://{self.host}:{self.port}/ws/rfc6455"
-        _LOGGER.debug("  url: {0}".format(url))
-
         try:
             self.session = aiohttp.ClientSession()
-            self.ws = await self.session.ws_connect(url, protocols=("remotecontrol"))
+            self.ws = await self.session.ws_connect(self.url, protocols=("remotecontrol"))
             self.state = STATE_RUNNING
             self._reconnect_counter = 0
 
