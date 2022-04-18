@@ -9,20 +9,19 @@ from collections import OrderedDict
 
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.const import (CONF_HOST, CONF_PASSWORD, CONF_PORT,
-                                 CONF_USERNAME)
+from homeassistant.const import (CONF_PASSWORD,
+                                 CONF_USERNAME, CONF_URL)
 from homeassistant.core import callback
 
 from .const import (CONF_LIGHTCONTROLLER_SUBCONTROLS_GEN, CONF_SCENE_GEN,
-                    CONF_SCENE_GEN_DELAY, DEFAULT_DELAY_SCENE, DEFAULT_IP,
-                    DEFAULT_PORT, DOMAIN)
+                    CONF_SCENE_GEN_DELAY, DEFAULT_DELAY_SCENE,
+                    DOMAIN)
 
 LOXONE_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_USERNAME, default=""): str,
         vol.Required(CONF_PASSWORD, default=""): str,
-        vol.Required(CONF_HOST, default=DEFAULT_IP): str,
-        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
+        vol.Required(CONF_URL, default=""): str,
         vol.Required(CONF_SCENE_GEN, default=True): bool,
         vol.Optional(CONF_SCENE_GEN_DELAY, default=DEFAULT_DELAY_SCENE): int,
         vol.Required(CONF_LIGHTCONTROLLER_SUBCONTROLS_GEN, default=False): bool,
@@ -33,7 +32,7 @@ LOXONE_SCHEMA = vol.Schema(
 class LoxoneFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle Pyloxone handle."""
 
-    VERSION = 3
+    VERSION = 4
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
 
     @staticmethod
@@ -74,8 +73,7 @@ class LoxoneOptionsFlowHandler(config_entries.OptionsFlow):
 
         user = self.config_entry.options.get(CONF_USERNAME, "")
         password = self.config_entry.options.get(CONF_PASSWORD, "")
-        host = self.config_entry.options.get(CONF_HOST, "")
-        port = self.config_entry.options.get(CONF_PORT, 80)
+        url = self.config_entry.options.get(CONF_URL, "")
         gen_scenes = self.config_entry.options.get(CONF_SCENE_GEN, True)
         gen_scene_delay = self.config_entry.options.get(
             CONF_SCENE_GEN_DELAY, DEFAULT_DELAY_SCENE
@@ -88,8 +86,7 @@ class LoxoneOptionsFlowHandler(config_entries.OptionsFlow):
 
         options[vol.Required(CONF_USERNAME, default=user)] = str
         options[vol.Required(CONF_PASSWORD, default=password)] = str
-        options[vol.Required(CONF_HOST, default=host)] = str
-        options[vol.Required(CONF_PORT, default=port)] = int
+        options[vol.Required(CONF_URL, default=url)] = str
         options[vol.Required(CONF_SCENE_GEN, default=gen_scenes)] = bool
         options[vol.Required(CONF_SCENE_GEN_DELAY, default=gen_scene_delay)] = int
         options[

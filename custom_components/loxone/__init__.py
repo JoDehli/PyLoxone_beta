@@ -114,6 +114,19 @@ async def async_migrate_entry(hass, config_entry):
         config_entry.options = {**new}
         config_entry.version = 3
         _LOGGER.info("Migration to version %s successful", 3)
+
+    if config_entry.version == 3:
+        host = config_entry.options.get("host")
+        port = config_entry.options.get("port")
+        url = f"http://{host}"
+        if port != "":
+            url += f":{port}"
+        new = {**config_entry.options, CONF_URL: url}
+        new.pop("host")
+        new.pop("port")
+        config_entry.options = {**new}
+        config_entry.version = 4
+        _LOGGER.info("Migration to version %s successful", 4)
     return True
 
 

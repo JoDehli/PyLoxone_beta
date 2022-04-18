@@ -22,10 +22,8 @@
         "step": {
             "init": {
                 "data": {
-                    "host": "Host",
+                    "url": "Web Address of miniserver",
                     "username": "User",
-                    "port": "Port",
-                    "host": "Miniserver Ip",
                     "password": "Password",
                     "generate_scenes": "Generate scenes",
                     "generate_lightcontroller_subcontrols": "Generate subcontrols for lightcontrollerV2",
