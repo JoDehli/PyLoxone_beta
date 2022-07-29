@@ -102,7 +102,7 @@ async def async_setup(hass, config):
 
 
 async def async_migrate_entry(hass, config_entry):
-    _LOGGER.debug("Migrating from version %s", config_entry.version)
+    # _LOGGER.debug("Migrating from version %s", config_entry.version)
     if config_entry.version == 1:
         new = {**config_entry.options, CONF_LIGHTCONTROLLER_SUBCONTROLS_GEN: True}
         config_entry.options = {**new}
@@ -185,6 +185,8 @@ async def async_setup_entry(hass, config_entry):
     if not setup_succeeded:
         return False
 
+    hass.data[DOMAIN][config_entry.entry_id] = miniserver
+
     connection_status = None
     setup_tasks = []
     for platform in LOXONE_PLATFORMS:
@@ -201,7 +203,6 @@ async def async_setup_entry(hass, config_entry):
     if setup_tasks:
         await asyncio.wait(setup_tasks)
     config_entry.add_update_listener(async_config_entry_updated)
-    hass.data[DOMAIN][config_entry.entry_id] = miniserver
 
     # config_entry.add_update_listener(async_config_entry_updated)
     #
