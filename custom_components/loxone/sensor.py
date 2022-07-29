@@ -18,7 +18,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from . import LoxoneEntity, get_miniserver_from_config_entry
 from .const import CONF_ACTIONID, DOMAIN, SENDDOMAIN
-from .helpers import (get_all, get_all_analog_info, get_all_digital_info,
+from .helpers import (get_all, get_all_analog_info,
                       get_cat_name_from_cat_uuid, get_room_name_from_room_uuid)
 
 NEW_SENSOR = "sensors"
@@ -73,16 +73,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             }
         )
 
-        sensors.append(Loxonesensor(**sensor))
-
-    for sensor in get_all_digital_info(loxconfig):
-        sensor.update(
-            {
-                "typ": "digital",
-                "room": get_room_name_from_room_uuid(loxconfig, sensor.get("room", "")),
-                "cat": get_cat_name_from_cat_uuid(loxconfig, sensor.get("cat", "")),
-            }
-        )
         sensors.append(Loxonesensor(**sensor))
 
     for sensor in get_all(loxconfig, "TextInput"):
