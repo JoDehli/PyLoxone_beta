@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Final
 
 # Loxone constants
-TIMEOUT: Final = 10
+TIMEOUT: Final = 60
 KEEP_ALIVE_PERIOD: Final = 240
 THROTTLE_CHECK_TOKEN_STILL_VALID: Final = (
     90  # 90 * KEEP_ALIVE_PERIOD -> 43200 sek -> 6 h
