@@ -299,11 +299,21 @@ async def async_setup_entry(hass, config_entry):
             if event.event_type == SENDDOMAIN and isinstance(event.data, dict):
                 value = event.data.get(ATTR_VALUE, DEFAULT)
                 device_uuid = event.data.get(ATTR_UUID, DEFAULT)
+                if device_uuid is None:
+                    device_uuid = DEFAULT
+                if value is None:
+                    value = DEFAULT
                 miniserver.send(f"jdev/sps/io/{device_uuid}/{value}")
             elif event.event_type == SECUREDSENDDOMAIN and isinstance(event.data, dict):
                 value = event.data.get(ATTR_VALUE, DEFAULT)
                 device_uuid = event.data.get(ATTR_UUID, DEFAULT)
                 code = event.data.get(ATTR_CODE, DEFAULT)
+                if code is None:
+                    code = DEFAULT
+                if device_uuid is None:
+                    device_uuid = DEFAULT
+                if value is None:
+                    value = DEFAULT
                 miniserver.send_secure((device_uuid, value, code))
         except ValueError:
             traceback.print_exc()

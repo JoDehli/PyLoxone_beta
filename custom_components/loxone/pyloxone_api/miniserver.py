@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import binascii
 import json
 import logging
 import queue
@@ -240,7 +241,7 @@ class MiniServer:
 
     def send_secure(self, secure_queue_para):
         self._secured_queue.put(secure_queue_para)
-        command = "{}{}".format(CMD_GET_VISUAL_PASSWD, self._username)
+        command = f"{CMD_GET_VISUAL_PASSWD}{self._username}"
         enc_command = self._encrypt(command)
         self.wsclient.send(enc_command)
 
@@ -478,7 +479,6 @@ class MiniServer:
                             m = hashlib.sha256()
                         m.update(pwd_hash_str.encode("utf-8"))
                         pwd_hash = m.hexdigest().upper()
-                        import binascii
 
                         if visual_key_and_salt.hash_alg == "SHA1":
                             digester = HMAC.new(
