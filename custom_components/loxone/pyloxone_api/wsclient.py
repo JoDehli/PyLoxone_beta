@@ -109,7 +109,6 @@ class WSClient:
                 self.state = CONNECTING
                 self.retry()
         else:
-            _LOGGER.debug("other websocket issue")
             if self.state != STATE_STOPPED:
                 self.state = CONNECTING
                 self.retry()

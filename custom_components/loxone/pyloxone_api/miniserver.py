@@ -535,14 +535,10 @@ class MiniServer:
             elif isinstance(mess_obj, DaytimerStatesTable):
                 _LOGGER.debug("Got DaytimerStatesTable")
                 # Todo implement this
-
             else:
                 _LOGGER.debug("Process <UNKNOWN> response")
-                print(mess_obj)
-                print(mess_obj.message)
-                # '{"LL": { "control": "uthwithtoken/80947fdc32ad6d4bee2b157bde50d38272cdb306/dev", "value": "File not found!", "Code": "404"}}'
-                # _LOGGER.debug("header: {0}-{1}-{2}".format(self.message_header.payload[0], self.message_header.payload[1], self.message_header.payload[2]))
-                # _LOGGER.debug("response: " + self.decrypt_message(message))
+                _LOGGER.debug(mess_obj)
+                _LOGGER.debug(mess_obj.message)
 
     async def _refresh(self) -> None:
         if self._token_hash is not None:
