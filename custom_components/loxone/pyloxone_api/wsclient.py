@@ -85,6 +85,7 @@ class WSClient:
 
             async for msg in self.ws:
                 if self.state == STATE_STOPPED:
+                    _LOGGER.debug("STATE_STOPPED")
                     break
                 elif msg.type == aiohttp.WSMsgType.BINARY:
                     await self.async_message_handler_callback(msg.data, True)
@@ -94,7 +95,7 @@ class WSClient:
                     _LOGGER.debug("CLOSED")
                     break
                 elif msg.type == aiohttp.WSMsgType.ERROR:
-                    _LOGGER.debug("ERROR")
+                    _LOGGER.debug("Websocket error: " + msg.data)
                     break
 
         except aiohttp.ClientConnectorError:
@@ -118,7 +119,7 @@ class WSClient:
     def retry(self):
         """Retry to connect."""
         self._reconnect_counter += 1
-        if self._reconnect_counter >= RETRY_COUTNER:
+        if self._reconnect_counter <= RETRY_COUTNER:
             self.loop.call_later(RETRY_TIMER, self.start)
             _LOGGER.debug("Reconnecting in %i.", RETRY_TIMER)
 

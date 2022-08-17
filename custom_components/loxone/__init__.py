@@ -318,6 +318,9 @@ async def async_setup_entry(hass, config_entry):
         except ValueError:
             traceback.print_exc()
 
+    async def kill_token(call):
+        miniserver.kill_token()
+
     async def handle_websocket_command(call):
         """Handle websocket command services."""
         value = call.data.get(ATTR_VALUE, DEFAULT)
@@ -354,6 +357,10 @@ async def async_setup_entry(hass, config_entry):
     hass.services.async_register(
         DOMAIN, "event_websocket_command", handle_websocket_command
     )
+    # Only for Debugging
+    # hass.services.async_register(
+    #     DOMAIN, "kill_token", kill_token
+    # )
 
     return True
 

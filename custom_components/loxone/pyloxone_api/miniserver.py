@@ -33,6 +33,7 @@ from .const import (
     CMD_KEEP_ALIVE,
     CMD_KEY_EXCHANGE,
     CMD_REFRESH_TOKEN,
+    CMD_KILL_TOKEN,
     CMD_REFRESH_TOKEN_JSON_WEB,
     CMD_REQUEST_TOKEN,
     CMD_REQUEST_TOKEN_JSON_WEB,
@@ -185,7 +186,7 @@ class MiniServer:
         self.wsclient: Optional[WSClient] = None
         self.async_connection_status_callback = None
         self._pending = []
-        self._get_key_queue = queue.Queue(maxsize=20)
+        self._get_key_queue = queue.Queue(maxsize=10)
         self._secured_queue = queue.Queue(maxsize=1)
 
     @property
@@ -238,6 +239,10 @@ class MiniServer:
 
     def send(self, command):
         self.wsclient.send(command)
+
+    def kill_token(self):
+        self.add_async_command_with_get_key(self._kill_token_command(self._token_hash, self._username))
+        #self.add_async_command_with_get_key())
 
     def send_secure(self, secure_queue_para):
         self._secured_queue.put(secure_queue_para)
@@ -392,7 +397,7 @@ class MiniServer:
                         self._token_hash = token_hash
                         try:
                             if not self._get_key_queue.empty():
-                                await self._get_key_queue.get()
+                                item = await self._get_key_queue.get()
                                 if not self._get_key_queue.empty():
                                     self.wsclient.send(f"{CMD_GET_KEY}")
                         except:
@@ -533,6 +538,9 @@ class MiniServer:
 
             else:
                 _LOGGER.debug("Process <UNKNOWN> response")
+                print(mess_obj)
+                print(mess_obj.message)
+                # '{"LL": { "control": "uthwithtoken/80947fdc32ad6d4bee2b157bde50d38272cdb306/dev", "value": "File not found!", "Code": "404"}}'
                 # _LOGGER.debug("header: {0}-{1}-{2}".format(self.message_header.payload[0], self.message_header.payload[1], self.message_header.payload[2]))
                 # _LOGGER.debug("response: " + self.decrypt_message(message))
 
@@ -671,6 +679,11 @@ class MiniServer:
                     _LOGGER.debug("Check if token still valid.")
                     self.add_async_command_with_get_key(self._check_token_command())
                     count = 0
+
+    async def _kill_token_command(self, token_or_tokenhash, user):
+        command = f"{CMD_KILL_TOKEN}{self._token_hash}/{self._username}"
+        enc_command = self._encrypt(command)
+        self.wsclient.send(enc_command)
 
     async def _check_token_command(self) -> None:
         if self._token_hash:
