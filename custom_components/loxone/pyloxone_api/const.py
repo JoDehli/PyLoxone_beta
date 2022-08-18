@@ -22,7 +22,7 @@ SALT_BYTES: Final = 16
 SALT_MAX_AGE_SECONDS: Final = 60 * 60
 SALT_MAX_USE_COUNT: Final = 30
 
-TOKEN_PERMISSION: Final = 2  # 2=web, 4=app
+TOKEN_PERMISSION: Final = 4  # 2=web, 4=app
 TOKEN_REFRESH_RETRY_COUNT: Final = 5
 # token will be refreshed 1 day before its expiration date
 TOKEN_REFRESH_SECONDS_BEFORE_EXPIRY: Final = (

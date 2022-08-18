@@ -8,6 +8,7 @@ import logging
 import queue
 import time
 import traceback
+import datetime
 import urllib.parse
 from base64 import b64decode, b64encode
 from collections import namedtuple
@@ -46,7 +47,7 @@ from .const import (
     SALT_MAX_USE_COUNT,
     THROTTLE_CHECK_TOKEN_STILL_VALID,
     TIMEOUT,
-    TOKEN_PERMISSION,
+    TOKEN_PERMISSION, TOKEN_REFRESH_SECONDS_BEFORE_EXPIRY,
 )
 from .exceptions import LoxoneException, LoxoneHTTPStatusError, LoxoneRequestError
 from .loxtoken import LoxToken
@@ -233,16 +234,41 @@ class MiniServer:
             command = f"{CMD_KEY_EXCHANGE}{self._session_key.decode()}"
             self.wsclient.send(command)
 
-    def add_async_command_with_get_key(self, coro):
-        self._get_key_queue.put(coro)
-        self.wsclient.send(f"{CMD_GET_KEY}")
+    def send_command(self):
+        print("Send command")
+
+    def add_async_command_with_get_key2(self, coro):
+
+        try:
+            task = self.loop.create_task(self.wsclient.ws.send_str(f"{CMD_GET_KEY}"))
+            task.add_done_callback(coro)
+        except Exception as err:
+            _LOGGER.error("send Error {0}".format(err))
+
+        # task = self.loop.create_task(self.wsclient.ws.send_str(f"{CMD_GET_KEY}"))
+        # #task = asyncio.create_task(self.wsclient.ws.send_str(f"{CMD_GET_KEY}"))
+        # task.add_done_callback(self.send_command(task.result))
+
+        #rest = asyncio.run(task)
+        print("D")
+        # #self.loop.create_task(self.ws.send_str(message))
+        # loop = asyncio.get_event_loop()
+        # #future = asyncio.run_coroutine_threadsafe(self.wsclient.ws.send_str(f"{CMD_GET_KEY}"), loop)
+        # future = asyncio.run_coroutine_threadsafe(coro, loop)
+        # try:
+        #     result = future.result(3)
+        # except concurrent.futures.TimeoutError:
+        #     print('The coroutine took too long, cancelling the task...')
+        #     future.cancel()
+        # except Exception as exc:
+        #     print(f'The coroutine raised an exception: {exc!r}')
+        # else:
+        #     print(f'The coroutine returned: {result!r}')
+        #self._get_key_queue.put(coro)
+        #self.wsclient.send(f"{CMD_GET_KEY}")
 
     def send(self, command):
         self.wsclient.send(command)
-
-    def kill_token(self):
-        self.add_async_command_with_get_key(self._kill_token_command(self._token_hash, self._username))
-        #self.add_async_command_with_get_key())
 
     def send_secure(self, secure_queue_para):
         self._secured_queue.put(secure_queue_para)
@@ -458,13 +484,32 @@ class MiniServer:
                 _LOGGER.debug("Process checktoken response")
                 if isinstance(mess_obj, TextMessage) and mess_obj.code == 200:
                     _LOGGER.debug(f"Token is verified for {self._username}.")
+
+                    def get_seconds_to_expire(vaild_until):
+                        dt = datetime.datetime.strptime("1.1.2009", "%d.%m.%Y")
+                        try:
+                            start_date = int(dt.strftime("%s"))
+                        except:
+                            start_date = int(dt.timestamp())
+                        start_date = int(start_date) + vaild_until
+                        return start_date - int(round(time.time()))
+
+                    valid_until = mess_obj.value_as_dict.get("validUntil", None)
+                    if valid_until:
+                        sec = get_seconds_to_expire(valid_until)
+                        if sec < TOKEN_REFRESH_SECONDS_BEFORE_EXPIRY:
+                            self.refresh_token()
+
                 elif isinstance(mess_obj, TextMessage) and mess_obj.code == 401:
                     raise LoxoneException("401 - UNAUTHORIZED for check token.")
                 elif isinstance(mess_obj, TextMessage) and mess_obj.code == 400:
                     raise LoxoneException("400 - BAD_REQUEST for check token.")
                 # Like an 401 but that when the token is no longer valid.
                 elif isinstance(mess_obj, TextMessage) and mess_obj.code == 477:
-                    self.add_async_command_with_get_key(self._refresh())
+                    self.refresh_token()
+
+            elif isinstance(mess_obj, TextMessage) and "kill" in mess_obj.message:
+                _LOGGER.debug("Process kill_token response")
 
             elif (
                     isinstance(mess_obj, TextMessage) and "getvisusalt" in mess_obj.message
@@ -539,17 +584,6 @@ class MiniServer:
                 _LOGGER.debug("Process <UNKNOWN> response")
                 _LOGGER.debug(mess_obj)
                 _LOGGER.debug(mess_obj.message)
-
-    async def _refresh(self) -> None:
-        if self._token_hash is not None:
-            if self._version < [10, 2]:
-                command = f"{CMD_REFRESH_TOKEN}{self._token_hash}/{self._username}"
-            else:
-                command = (
-                    f"{CMD_REFRESH_TOKEN_JSON_WEB}{self._token_hash}/{self._username}"
-                )
-            enc_command = self._encrypt(command)
-            self.wsclient.send(enc_command)
 
     async def _get_json(self) -> bool:
         """Obtain basic info from the miniserver
@@ -673,16 +707,47 @@ class MiniServer:
                         count >= THROTTLE_CHECK_TOKEN_STILL_VALID
                 ):  # Throttle the check_still_valid
                     _LOGGER.debug("Check if token still valid.")
-                    self.add_async_command_with_get_key(self._check_token_command())
+                    self.check_token()
                     count = 0
 
-    async def _kill_token_command(self, token_or_tokenhash, user):
-        command = f"{CMD_KILL_TOKEN}{self._token_hash}/{self._username}"
-        enc_command = self._encrypt(command)
-        self.wsclient.send(enc_command)
-
-    async def _check_token_command(self) -> None:
-        if self._token_hash:
-            command = f"{CMD_CHECK_TOKEN}{self._token_hash}/{self._username}"
+    def check_token(self):
+        try:
+            command = f"{CMD_CHECK_TOKEN}{self._token.token}/{self._username}"
             enc_command = self._encrypt(command)
-            self.wsclient.send(enc_command)
+            _ = self.loop.create_task(self.wsclient.ws.send_str(enc_command))
+        except Exception as err:
+            _LOGGER.error("send Error {0}".format(err))
+
+        # try:
+        #     task = self.loop.create_task(self.wsclient.ws.send_str(f"{CMD_GET_KEY}"))
+        #     task.add_done_callback(check())
+        # except Exception as err:
+        #     _LOGGER.error("send Error {0}".format(err))
+
+    def kill_token(self):
+        command = f"{CMD_KILL_TOKEN}{self._token.token}/{self._username}"
+        enc_command = self._encrypt(command)
+        try:
+            _LOGGER.debug(f"send: {command}")
+            _ = self.loop.create_task(self.wsclient.ws.send_str(enc_command))
+        except Exception as err:
+            _LOGGER.error(f"send Error {err}")
+
+        # try:
+        #     task = self.loop.create_task(self.wsclient.ws.send_str(f"{CMD_GET_KEY}"))
+        #     task.add_done_callback(kill())
+        # except Exception as err:
+        #     _LOGGER.error("send Error {0}".format(err))
+
+    def refresh_token(self) -> None:
+        command = (
+            f"{CMD_REFRESH_TOKEN_JSON_WEB}{self._token.token}/{self._username}"
+        )
+        enc_command = self._encrypt(command)
+        try:
+            _LOGGER.debug(f"send: {command}")
+            _ = self.loop.create_task(self.wsclient.ws.send_str(enc_command))
+        except Exception as err:
+            _LOGGER.error("send Error {0}".format(err))
+
+

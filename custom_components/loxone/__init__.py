@@ -321,6 +321,12 @@ async def async_setup_entry(hass, config_entry):
     async def kill_token(call):
         miniserver.kill_token()
 
+    async def check_token(call):
+        miniserver.check_token()
+
+    async def refresh_token(call):
+        miniserver.refresh_token()
+
     async def handle_websocket_command(call):
         """Handle websocket command services."""
         value = call.data.get(ATTR_VALUE, DEFAULT)
@@ -358,9 +364,17 @@ async def async_setup_entry(hass, config_entry):
         DOMAIN, "event_websocket_command", handle_websocket_command
     )
     # Only for Debugging
-    # hass.services.async_register(
-    #     DOMAIN, "kill_token", kill_token
-    # )
+    hass.services.async_register(
+        DOMAIN, "kill_token", kill_token
+    )
+
+    hass.services.async_register(
+        DOMAIN, "check_token", check_token
+    )
+
+    hass.services.async_register(
+        DOMAIN, "refresh_token", refresh_token
+    )
 
     return True
 

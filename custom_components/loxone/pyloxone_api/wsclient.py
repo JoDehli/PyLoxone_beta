@@ -103,7 +103,8 @@ class WSClient:
             if self.state != STATE_STOPPED:
                 self.state = CONNECTING
                 self.retry()
-        except Exception as err:
+
+        except aiohttp.WebSocketError as err:
             _LOGGER.error("Error {0}".format(err))
             if self.state != STATE_STOPPED:
                 self.state = CONNECTING
