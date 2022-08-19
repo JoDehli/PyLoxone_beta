@@ -10,6 +10,7 @@ import time
 import traceback
 import datetime
 import urllib.parse
+import urllib.request as req
 from base64 import b64decode, b64encode
 from collections import namedtuple
 from typing import Optional
@@ -110,8 +111,14 @@ class _SaltMine:
         self._previous = self._salt
 
     def _generate_new_salt(self) -> None:
-        self._salt = get_random_bytes(SALT_BYTES).hex()
-        self._timestamp = time.time()
+
+        def time_elapsed_in_seconds():
+            return int(round(time.time()))
+
+        self._salt = get_random_bytes(SALT_BYTES)
+        self._salt = binascii.hexlify(self._salt).decode("utf-8")
+        self._salt = req.pathname2url(self._salt)
+        self._timestamp = time_elapsed_in_seconds()
         self._used_count: int = 0
         _LOGGER.debug("Generating a new salt")
 
@@ -132,6 +139,7 @@ class _SaltMine:
             # the salt has expired. Get a new one.
             self._previous = self._salt
             self._generate_new_salt()
+            self._is_new = True
 
         return Salt(self._salt, self._is_new, self._previous)
 
@@ -281,9 +289,9 @@ class MiniServer:
         #     return command
         salt = self._salt_mine.get_salt()
         if salt.is_new:
-            s = f"nextSalt/{salt.previous}/{salt.value}/{command}\x00"
+            s = f"nextSalt/{salt.previous}/{salt.value}/{command}\0"
         else:
-            s = f"salt/{salt.value}/{command}\x00"
+            s = f"salt/{salt.value}/{command}\0"
 
         padded_s = Padding.pad(bytes(s, "utf-8"), 16)
         aes_cipher = AES.new(self._key, AES.MODE_CBC, self._iv)

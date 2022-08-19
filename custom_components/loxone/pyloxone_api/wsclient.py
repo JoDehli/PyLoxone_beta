@@ -81,9 +81,9 @@ class WSClient:
             self.session = aiohttp.ClientSession()
             self.ws = await self.session.ws_connect(self.url, protocols=("remotecontrol"))
             self.state = STATE_RUNNING
-            self._reconnect_counter = 0
 
             async for msg in self.ws:
+                self._reconnect_counter = 0
                 if self.state == STATE_STOPPED:
                     _LOGGER.debug("STATE_STOPPED")
                     break
