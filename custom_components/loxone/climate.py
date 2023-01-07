@@ -8,10 +8,12 @@ https://github.com/JoDehli/PyLoxone
 import logging
 from abc import ABC
 
+from homeassistant.const import UnitOfTemperature
 from homeassistant.components.climate import (PLATFORM_SCHEMA,
                                               SUPPORT_PRESET_MODE,
                                               SUPPORT_TARGET_TEMPERATURE,
-                                              TEMP_CELSIUS, ClimateEntity)
+                                              ClimateEntity)
+
 from homeassistant.components.climate.const import (HVAC_MODE_AUTO,
                                                     HVAC_MODE_COOL,
                                                     HVAC_MODE_HEAT,
@@ -182,7 +184,8 @@ class LoxoneRoomControllerV2(LoxoneEntity, ClimateEntity, ABC):
     def temperature_unit(self):
         """Return the unit of measurement used by the platform."""
 
-        return TEMP_CELSIUS
+        return UnitOfTemperature.CELSIUS
+
 
     @property
     def target_temperature(self):
